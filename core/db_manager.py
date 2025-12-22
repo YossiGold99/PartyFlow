@@ -34,13 +34,49 @@ def get_all_events():
     conn.close()
     return events
 
+def delete_event(event_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute('DELETE FROM events WHERE id = ?', (event_id,))
+    conn.commit()
+    conn.close()
+    print(f"Event {event_id} deleted successfully.")
+
+def get_remaining_tickets(event_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # 1. count sold tickets
+    cursor.execute('SELECT COUNT(*) FROM tickets WHERE event_id = ?', (event_id,))
+    sold_count = cursor.fetchone()[0]
+    # 2. get total_tickets from events table
+    cursor.execute("SELECT total_tickets FROM events WHERE id = ?", (event_id,))
+
+    event = cursor.fetchone()
+    total_tickets = event['total_tickets']
+    conn.close()
+    return total_tickets - sold_count
+
+# This block runs only if we execute this file directly
 if __name__ == "__main__":
     print("--testing Database manager--")
-
-    #1. Add a test event
-    add_event("christmas Party", "2024-12-31", "hamon 17,TLV", 250, 800)
-    # 2.Fecth and display all events to see if it workded
-    print("/mCurrent Ecencts in Database:")
+    # 1. Test Adding 
+    print("\n--- Adding a dummy event ---")
+    add_event("Mistake Party", "2099-01-01", "TLV", 0, 500)
     events = get_all_events()
-    for event in events:
-        print(f"{event['name']} - {event['price']} NIS")
+    last_event = events[-1] 
+    last_id = last_event['id']
+    print(f"Added event: {last_event['name']} (ID: {last_id})")
+    # 2. Test Ticket Calculation
+    print("\n--- Testing Ticket Count ---")
+    remaining = get_remaining_tickets(last_id)
+    print(f"Tickets remaining for event {last_id}: {remaining}")
+    # 3. Test Deletion
+    print(f"\n--- Deleting event {last_id} ---")
+    delete_event(last_id)
+    # 4. Final Verification
+    print("\n--- Final Event List ---")
+    current_events = get_all_events()
+    for event in current_events:
+        print(f"{event['id']}: {event['name']}")
