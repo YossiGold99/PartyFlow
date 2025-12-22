@@ -1,14 +1,23 @@
 from core import db_manager
 
-# 1. show all existing events
-events = db_manager.get_all_events()
+action = input("Do you want to 'add' or 'delete' an event? ")
 
-print("--list of events--")
-for event in events:
-    print(event['id'], event['name'])
+if action == 'delete':
+    # display all events
+    events = db_manager.get_all_events()
+    for event in events:
+        print(event['id'], event['name'])
 
-# 2. ask user ifor ID to delete
-event_id = input("\nEnter event id to delete: ")
+    # get event id to delete
+    event_id = input("Enter event ID to delete: ")
+    db_manager.delete_event(event_id)
 
-# 3.perform deletion
-db_manager.delete_event(event_id)
+elif action == 'add':
+    print("--- Add New Event ---")
+    name = input("Event Name: ")
+    date = input("Event Date (YYYY-MM-DD): ")
+    location = input("Event Location: ")
+    price = float(input("Ticket Price: "))
+    total_tickets = int(input("Total Tickets Available: "))
+    db_manager.add_event(name, date, location, price, total_tickets)
+    print(f"Event '{name}' added successfully.")
