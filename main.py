@@ -69,10 +69,22 @@ def buy_ticket(ticket: TicketRequest):
 # WEB: Show the Dashboard
 @app.get("/dashboard", response_class=HTMLResponse)
 def show_dashboard(request: Request):
-    # Get real data from database
+    # 1. Get list of events
     events = db_manager.get_events()
-    # Render the HTML file with the data
-    return templates.TemplateResponse("dashboard.html", {"request": request, "events": events})
+    
+    # 2. Get Analytics Data using the new functions
+    stats = {
+        "total_revenue": db_manager.get_total_revenue(),
+        "tickets_sold": db_manager.get_total_tickets_sold(),
+        "top_event": db_manager.get_top_event()
+    }
+
+    # 3. Render HTML with both 'events' and 'stats'
+    return templates.TemplateResponse("dashboard.html", {
+        "request": request, 
+        "events": events,
+        "stats": stats
+    })
 
 # WEB: Add a new event via the form
 @app.post("/dashboard/add")

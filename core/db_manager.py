@@ -94,3 +94,43 @@ def get_tickets_sold(event_id):
     count = cursor.fetchone()[0]
     conn.close()
     return count
+
+# --- Analytics Functions ---
+
+def get_total_revenue():
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    # Calculate total revenue: sum of (event price) for all sold tickets
+    cursor.execute('''
+        SELECT SUM(events.price) 
+        FROM tickets 
+        JOIN events ON tickets.event_id = events.id
+    ''')
+    result = cursor.fetchone()[0]
+    conn.close()
+    return round(result, 2) if result else 0
+
+def get_total_tickets_sold():
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    # Count total number of rows in tickets table
+    cursor.execute("SELECT COUNT(*) FROM tickets")
+    result = cursor.fetchone()[0]
+    conn.close()
+    return result if result else 0
+
+def get_top_event():
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    # Find the event with the highest number of sold tickets
+    cursor.execute('''
+        SELECT events.name, COUNT(tickets.id) as ticket_count
+        FROM tickets
+        JOIN events ON tickets.event_id = events.id
+        GROUP BY events.id
+        ORDER BY ticket_count DESC
+        LIMIT 1
+    ''')
+    result = cursor.fetchone()
+    conn.close()
+    return result[0] if result else "No Sales Yet"
