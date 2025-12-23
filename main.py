@@ -34,6 +34,21 @@ def get_events_api():
 # API: Buy Ticket - Used by the Bot
 @app.post("/buy_ticket")
 def buy_ticket(ticket: TicketRequest):
+    # 1. Get event details to check limits
+    event = db_manager.get_event_by_id(ticket.event_id)
+    
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    
+    # 2. Check how many tickets were already sold
+    sold_count = db_manager.get_tickets_sold(ticket.event_id)
+    total_tickets = event['total_tickets']
+    
+    # 3. Logic Check: Is it Sold Out?
+    if sold_count >= total_tickets:
+        raise HTTPException(status_code=400, detail="Sorry, this event is SOLD OUT!")
+
+    # 4. If space is available, proceed to buy
     success = db_manager.add_ticket(
         event_id=ticket.event_id,
         user_id=ticket.user_id,
@@ -42,9 +57,12 @@ def buy_ticket(ticket: TicketRequest):
     )
     
     if success:
-        return {"status": "success", "message": f"Ticket bought for {ticket.user_name}"}
+        return {
+            "status": "success", 
+            "message": f"Ticket bought! ({sold_count + 1}/{total_tickets} sold)"
+        }
     else:
-        raise HTTPException(status_code=500, detail="Failed to save ticket in database")
+        raise HTTPException(status_code=500, detail="Database Error")
 
 # --- WEB DASHBOARD ROUTES (Full Stack Part) ---
 

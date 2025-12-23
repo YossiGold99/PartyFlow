@@ -21,7 +21,7 @@ def create_tables():
         )
     ''')
 
-    # Tickets table - includes the phone_number column
+    # Tickets table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS tickets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -64,7 +64,7 @@ def get_events():
     conn.close()
     return [dict(row) for row in rows]
 
-# Function to add an event (used by manage.py)
+# Function to add an event (used by manage.py and web dashboard)
 def add_event(name, date, location, price, total_tickets):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -74,3 +74,23 @@ def add_event(name, date, location, price, total_tickets):
     ''', (name, date, location, price, total_tickets))
     conn.commit()
     conn.close()
+
+
+def get_event_by_id(event_id):
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    # Retrieves the party details by ID
+    cursor.execute("SELECT * FROM events WHERE id = ?", (event_id,))
+    event = cursor.fetchone()
+    conn.close()
+    return dict(event) if event else None
+
+def get_tickets_sold(event_id):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    # Count how many tickets were sold for this party
+    cursor.execute("SELECT COUNT(*) FROM tickets WHERE event_id = ?", (event_id,))
+    count = cursor.fetchone()[0]
+    conn.close()
+    return count

@@ -103,38 +103,49 @@ def ask_phone(message):
     # Register the next step
     bot.register_next_step_handler(msg, finalize_order)
 
-# 3.save phone number and dinalize purchase with the server
+# Step 3: Save phone and finalize purchase with the server
 def finalize_order(message):
     chat_id = message.chat.id
     phone = message.text
-
-    # retrieve collected data for this user
+    
+    # Retrieve collected data for this user
     current_user = user_data.get(chat_id)
     if not current_user:
-        bot.send_message(chat_id, "session expired. Please try again.")
+        bot.send_message(chat_id, "Session expired. Please try again.")
         return
-    
-    # Prepare the data to send to the server
+
+    # Prepare data for the server
     payload = {
         "event_id": current_user['event_id'],
         "user_name": current_user['name'],
         "user_id": chat_id,     # Unique Telegram ID
         "phone_number": phone   # The phone number the user typed
     }
-
+    
     bot.send_message(chat_id, "Processing your order... ⏳")
-
+    
     try:
         # Send POST request to the server
         response = requests.post(f"{API_URL}/buy_ticket", json=payload)
         
         if response.status_code == 200:
-            bot.send_message(chat_id, f"✅ **Success!**\nTicket saved for {current_user['name']}.\nWe will contact you at {phone}.")
+            # Success!
+            data = response.json()
+            # We use the message from the server (which includes ticket count)
+            success_msg = data.get('message', 'Ticket bought successfully!')
+            bot.send_message(chat_id, f"✅ **Success!**\n{success_msg}\nWe will contact you at {phone}.")
+            
+        elif response.status_code == 400:
+            # Server logic error (like SOLD OUT)
+            error_detail = response.json().get('detail', 'Cannot buy ticket')
+            bot.send_message(chat_id, f"⚠️ **Order Failed:**\n{error_detail}")
+            
         else:
-            bot.send_message(chat_id, "❌ Error saving ticket. Please try again.")
+            # General server error (500)
+            bot.send_message(chat_id, "❌ System Error. Please try again later.")
             
     except Exception as e:
-        bot.send_message(chat_id, f"System Error: {e}")
+        bot.send_message(chat_id, f"Connection Error: {e}")
     
     # Clear memory for this user
     user_data.pop(chat_id, None)
