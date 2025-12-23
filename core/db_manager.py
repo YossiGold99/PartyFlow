@@ -58,6 +58,52 @@ def get_remaining_tickets(event_id):
     conn.close()
     return total_tickets - sold_count
 
+def sell_ticket(event_id, user_id,user_name):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+# Insert ticket into the tickets table
+# We use the 'phone_number' column to store the Telegram user_id
+    cursor.execute('''
+                INSERT INTO tickets (event_id, phone_number, user_name)
+                VALUES (?,?,?)
+                ''', (event_id, user_name, str(user_id)))
+    conn.commit()
+    conn.close()
+    print(f"Ticket sold to {user_name} (ID: {user_id}) for event {event_id}")
+
+def create_tables():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Create a party table (if it doesn't exist)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            date TEXT NOT NULL,
+            location TEXT NOT NULL,
+            price REAL NOT NULL,
+            total_tickets INTEGER NOT NULL
+        )
+    ''')
+    
+    # Create a card table (the new one!)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS tickets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id INTEGER NOT NULL,
+            user_name TEXT NOT NULL,
+            phone_number TEXT NOT NULL,
+            FOREIGN KEY (event_id) REFERENCES events (id)
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
+    print("Tables created successfully.")
+    
+
+
 # This block runs only if we execute this file directly
 if __name__ == "__main__":
     print("--testing Database manager--")

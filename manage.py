@@ -20,4 +20,9 @@ elif action == 'add':
     price = float(input("Ticket Price: "))
     total_tickets = int(input("Total Tickets Available: "))
     db_manager.add_event(name, date, location, price, total_tickets)
-    print(f"Event '{name}' added successfully.")
+    # print(f"Event '{name}' added successfully.")
+
+# if __name__ == "__main__":
+#     db_manager.create_tables()
+#     print("Tables created successfully!")
+    
