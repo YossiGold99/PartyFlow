@@ -1,3 +1,18 @@
-venv/
+# Security (מפתחות סודיים)
+.env
+
+# Python (קבצים זמניים של פייתון)
 __pycache__/
+*.pyc
+
+# Virtual Environment (הסביבה הווירטואלית עצמה)
+venv/
+env/
+
+# Database (הדאטאבייס המקומי שלך)
 *.db
+database/*.db
+
+# OS (קבצי מערכת הפעלה מיותרים)
+.DS_Store
+Thumbs.db
