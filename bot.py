@@ -1,8 +1,9 @@
 import os
 import telebot
-from telebot import types 
 import requests
+from telebot import types 
 from dotenv import load_dotenv
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # 1. Load secrets from .env file
 load_dotenv()
@@ -108,46 +109,44 @@ def finalize_order(message):
     chat_id = message.chat.id
     phone = message.text
     
-    # Retrieve collected data for this user
     current_user = user_data.get(chat_id)
     if not current_user:
-        bot.send_message(chat_id, "Session expired. Please try again.")
+        bot.send_message(chat_id, "Session expired. Please use /start again.")
         return
 
-    # Prepare data for the server
+    # Prepare payload for the checkout session
     payload = {
         "event_id": current_user['event_id'],
         "user_name": current_user['name'],
-        "user_id": chat_id,     # Unique Telegram ID
-        "phone_number": phone   # The phone number the user typed
+        "user_id": chat_id,
+        "phone_number": phone
     }
     
-    bot.send_message(chat_id, "Processing your order... ⏳")
+    bot.send_message(chat_id, "Generating payment link... 💳")
     
     try:
-        # Send POST request to the server
-        response = requests.post(f"{API_URL}/buy_ticket", json=payload)
+        # Request payment URL from the server
+        response = requests.post(f"{API_URL}/create_checkout_session", json=payload)
         
         if response.status_code == 200:
-            # Success!
             data = response.json()
-            # We use the message from the server (which includes ticket count)
-            success_msg = data.get('message', 'Ticket bought successfully!')
-            bot.send_message(chat_id, f"✅ **Success!**\n{success_msg}\nWe will contact you at {phone}.")
+            payment_url = data.get('checkout_url')
             
-        elif response.status_code == 400:
-            # Server logic error (like SOLD OUT)
-            error_detail = response.json().get('detail', 'Cannot buy ticket')
-            bot.send_message(chat_id, f"⚠️ **Order Failed:**\n{error_detail}")
+            # Create an inline button with the payment link
+            markup = InlineKeyboardMarkup()
+            markup.add(InlineKeyboardButton("👉 Click to Pay Now 👈", url=payment_url))
             
+            bot.send_message(chat_id, "Ticket reserved! Please complete payment:", reply_markup=markup)
+            
+        elif response.status_code == 400: # Handle Sold Out
+            bot.send_message(chat_id, "⚠️ Sorry, this event is SOLD OUT!")
         else:
-            # General server error (500)
-            bot.send_message(chat_id, "❌ System Error. Please try again later.")
+            bot.send_message(chat_id, "❌ Error generating payment link.")
             
     except Exception as e:
         bot.send_message(chat_id, f"Connection Error: {e}")
     
-    # Clear memory for this user
+    # Clear user session
     user_data.pop(chat_id, None)
 
 # 4. Start the bot
