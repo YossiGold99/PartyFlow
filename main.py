@@ -190,3 +190,24 @@ def add_event_web(
     """Adds a new event via the web form."""
     db_manager.add_event(name, date, location, price, total_tickets)
     return RedirectResponse(url="/dashboard", status_code=303)
+
+# --- Authentication Model ---
+
+class LoginRequest(BaseModel):
+    password: str
+
+# --- Authentication Route ---
+
+@app.post("/api/login")
+def login(request: LoginRequest):
+    """
+    Validates the admin password.
+    Compares the input against the environment variable ADMIN_PASSWORD.
+    """
+    # Get password from .env or use default "admin"
+    admin_password = os.getenv("ADMIN_PASSWORD", "admin")
+    
+    if request.password == admin_password:
+        return {"success": True, "message": "Login successful"}
+    else:
+        raise HTTPException(status_code=401, detail="Incorrect password")

@@ -1,11 +1,22 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
+import './App.css' 
 
 function App() {
+  // --- Authentication State ---
+  
+  // Check LocalStorage to see if the user is already logged in
+  const [isAuthenticated, setIsAuthenticated] = useState(
+    localStorage.getItem('isAdmin') === 'true'
+  )
+  const [password, setPassword] = useState('')
+  const [loginError, setLoginError] = useState('')
+
+  // --- Dashboard Data State ---
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
-
-  // State for the new event form
+  
+  // --- New Event Form State ---
   const [newEvent, setNewEvent] = useState({
     name: '',
     date: '',
@@ -14,7 +25,33 @@ function App() {
     total_tickets: ''
   })
 
-  // Function to fetch data from the server (Reusable)
+  // --- Authentication Logic ---
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    try {
+      // Send password to server for validation
+      const response = await axios.post('http://127.0.0.1:8000/api/login', { password });
+      
+      if (response.data.success) {
+        setIsAuthenticated(true);
+        localStorage.setItem('isAdmin', 'true'); // Persist login
+        fetchData(); // Load data immediately
+        setLoginError('');
+      }
+    } catch {
+      setLoginError("❌ Incorrect password");
+    }
+  }
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    localStorage.removeItem('isAdmin'); // Clear session
+    setPassword(''); 
+  }
+
+  // --- Data Fetching Logic ---
+
   const fetchData = async () => {
     try {
       const response = await axios.get('http://127.0.0.1:8000/api/stats');
@@ -26,37 +63,69 @@ function App() {
     }
   };
 
-  // Initial data load
+  // Effect: Load data only if authenticated
   useEffect(() => {
-    fetchData();
-  }, [])
+    if (isAuthenticated) {
+      fetchData();
+    }
+  }, [isAuthenticated])
 
-  // Handle form input changes
+  // --- Event Management Logic ---
+
   const handleInputChange = (e) => {
     setNewEvent({ ...newEvent, [e.target.name]: e.target.value });
   }
 
-  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault(); // Prevent page reload
     try {
       await axios.post('http://127.0.0.1:8000/api/events', newEvent);
-
-      // Clear form and refresh data
+      
+      // Reset form and refresh table
       setNewEvent({ name: '', date: '', location: '', price: '', total_tickets: '' });
       alert("Event added successfully! 🎉");
-      fetchData(); // Reload the table
+      fetchData();
     } catch (error) {
       console.error("Error adding event:", error);
       alert("Failed to add event.");
     }
   }
 
+  // --- View 1: Login Screen (Rendered if not authenticated) ---
+  if (!isAuthenticated) {
+    return (
+      <div className="container d-flex justify-content-center align-items-center vh-100 bg-light">
+        <div className="card shadow p-4" style={{ width: '400px' }}>
+          <h2 className="text-center mb-4">🔒 Admin Login</h2>
+          <form onSubmit={handleLogin}>
+            <div className="mb-3">
+              <label className="form-label">Password</label>
+              <input 
+                type="password" 
+                className="form-control" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoFocus
+              />
+            </div>
+            {loginError && <p className="text-danger text-center">{loginError}</p>}
+            <button type="submit" className="btn btn-primary w-100">Login</button>
+          </form>
+        </div>
+      </div>
+    )
+  }
+
+  // --- View 2: Dashboard (Rendered if authenticated) ---
+  
   if (loading) return <div className="text-center mt-5">Loading Dashboard...</div>
 
   return (
     <div className="container mt-5 pb-5">
-      <h1 className="text-center mb-5">🎉 PartyFlow Dashboard (React)</h1>
+      <div className="d-flex justify-content-between align-items-center mb-5">
+        <h1>🎉 PartyFlow Dashboard</h1>
+        <button onClick={handleLogout} className="btn btn-outline-danger">Logout 🚪</button>
+      </div>
 
       {/* Analytics Cards */}
       <div className="row text-center mb-5">
