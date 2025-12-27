@@ -7,12 +7,20 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from core import db_manager
+from fastapi.middleware.cors import CORSMiddleware
 
 # Load environment variables from .env file
 load_dotenv()
 
 app = FastAPI()
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, change this to the specific domain
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 # Configure Stripe API Key
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 YOUR_DOMAIN = "http://127.0.0.1:8000"
@@ -28,7 +36,38 @@ class TicketRequest(BaseModel):
     user_id: int
     phone_number: str
 
+# Data model for creating a new event via React
+class EventRequest(BaseModel):
+    name: str
+    date: str
+    location: str
+    price: float
+    total_tickets: int
 # --- General Routes ---
+
+# API Endpoint for React Dashboard
+@app.get("/api/stats")
+def get_dashboard_stats():
+    return {
+        "stats": {
+            "total_revenue": db_manager.get_total_revenue(),
+            "tickets_sold": db_manager.get_total_tickets_sold(),
+            "top_event": db_manager.get_top_event()
+        },
+        "events": db_manager.get_events()
+    }
+
+@app.post("/api/events")
+def add_event_api(event: EventRequest):
+    """API endpoint to add a new event via React form."""
+    db_manager.add_event(
+        event.name,
+        event.date,
+        event.location,
+        event.price,
+        event.total_tickets
+    )
+    return {"message": "Event added successfully"}
 
 @app.get("/")
 def read_root():
