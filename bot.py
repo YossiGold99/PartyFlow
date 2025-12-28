@@ -1,7 +1,8 @@
 import os
-import telebot
+import telebot 
 import requests
-from telebot import types 
+import phonenumbers # <--- חשוב לוודא שזה קיים
+from telebot import types  
 from dotenv import load_dotenv
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
@@ -10,7 +11,7 @@ load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 API_URL = os.getenv("API_URL")
 
-# 2.Check if token exists
+# 2. Check if token exists
 if not TELEGRAM_TOKEN:
     print("Error: No TELEGRAM_TOKEN found in .env file")
     exit()
@@ -19,8 +20,7 @@ if not TELEGRAM_TOKEN:
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 print("Bot is running...")
 
-# Temporary dictionary to store data during the registration flow
-# Structure: {chat_id: {'event_id': 1, 'name': 'Yossi'}}
+# Temporary dictionary to store data
 user_data = {}
 
 # --- Standard commands ---
@@ -32,17 +32,15 @@ def send_welcome(message):
 @bot.message_handler(commands=['events'])
 def list_events(message):
     try:
-        # Check if API_URL is defined
         if not API_URL:
             bot.reply_to(message, "Error: API_URL is missing.")
             return
         
-        # Send request to the server 
         response = requests.get(f"{API_URL}/events")
 
         if response.status_code == 200:
             data = response.json()
-            events=data.get('events', [])
+            events = data.get('events', [])
 
             if not events:
                 bot.reply_to(message, "No upcoming parties found")
@@ -51,20 +49,16 @@ def list_events(message):
             bot.send_message(message.chat.id, "🎉 **Upcoming Parties:** 👇")
 
             for event in events:
-                # Create the event text
                 event_text = (
                     f"🎈 **{event['name']}**\n"
                     f"📍 {event['location']} | 📅 {event['date']}\n"
                     f"💰 Price: {event['price']} NIS"
                 )
 
-                # Create the button
                 markup = types.InlineKeyboardMarkup()
-                # the button stores the party ID inthe callback_data
                 buy_button = types.InlineKeyboardButton("🛒 Buy Ticket", callback_data=f"buy_{event['id']}")
                 markup.add(buy_button)
 
-                # Send message with the button
                 bot.send_message(message.chat.id, event_text, reply_markup=markup, parse_mode="markdown")
 
         else:
@@ -73,72 +67,87 @@ def list_events(message):
     except Exception as e:
         bot.reply_to(message, f"Connection failed: {e}")
 
-# --- Smart Registration FLow ---
+# --- Smart Registration Flow ---
 
-# 1. User clicks the "buy" button
-@bot.callback_query_handler(func=lambda call:call.data.startswith("buy_"))
+# Step 1: User clicks "buy"
+@bot.callback_query_handler(func=lambda call: call.data.startswith("buy_"))
 def ask_name(call):
     chat_id = call.message.chat.id
-    # Extract event ID from callback data (e.g., "buy_3" -> 3)
     event_id = int(call.data.split('_')[1])
 
-    # Initialize dictionary for this specific user
     user_data[chat_id] = {'event_id': event_id}
 
-    # Ask for the user's name
     msg = bot.send_message(chat_id, "Great choice! 🎫\nWhat is your **Full Name**?")
+    bot.register_next_step_handler(msg, ask_phone)
 
-    # Register the next step: tell the bot to pass the NEXT user message to 'step2_ask_phone'
-    bot.register_next_step_handler(msg,ask_phone)
-
-# 2. save name and ask for phone number
+# Step 2: Save name and ask for phone
 def ask_phone(message):
     chat_id = message.chat.id
     name = message.text
 
-    # Save name in the temporary dictionary
     user_data[chat_id]['name'] = name
 
     msg = bot.send_message(chat_id, f"Nice to meet you, {name}! 👋\nNow, please enter your **Phone Number**:")
+    
+    bot.register_next_step_handler(msg, validate_phone) 
 
-    # Register the next step
-    bot.register_next_step_handler(msg, finalize_order)
-
-# Step 3: Save phone and finalize purchase with the server
-def finalize_order(message):
+# Step 3: Validate the phone number (הפונקציה החדשה)
+def validate_phone(message):
     chat_id = message.chat.id
-    phone = message.text
+    phone_input = message.text
+    
+    try:
+        # 1. Parse number (Assuming Israel)
+        parsed_number = phonenumbers.parse(phone_input, "IL")
+        
+        # 2. Check if valid
+        if not phonenumbers.is_valid_number(parsed_number):
+            msg = bot.send_message(chat_id, "❌ Invalid number. Please try again (e.g., 0501234567):")
+            bot.register_next_step_handler(msg, validate_phone) # Loop back if error
+            return
+
+        # 3. Format nicely (Optional)
+        formatted_phone = phonenumbers.format_number(parsed_number, phonenumbers.PhoneNumberFormat.E164)
+        
+        # Save valid phone and proceed
+        finalize_order(message, formatted_phone)
+
+    except phonenumbers.NumberParseException:
+        msg = bot.send_message(chat_id, "❌ That doesn't look like a phone number. Try again:")
+        bot.register_next_step_handler(msg, validate_phone) # Loop back if error
+
+# Step 4: Finalize purchase with server
+def finalize_order(message, valid_phone):
+    chat_id = message.chat.id
+    # We use the valid_phone passed from the previous function
     
     current_user = user_data.get(chat_id)
     if not current_user:
         bot.send_message(chat_id, "Session expired. Please use /start again.")
         return
 
-    # Prepare payload for the checkout session
     payload = {
         "event_id": current_user['event_id'],
         "user_name": current_user['name'],
         "user_id": chat_id,
-        "phone_number": phone
+        "phone_number": valid_phone
     }
     
     bot.send_message(chat_id, "Generating payment link... 💳")
     
     try:
-        # Request payment URL from the server
         response = requests.post(f"{API_URL}/create_checkout_session", json=payload)
         
         if response.status_code == 200:
             data = response.json()
             payment_url = data.get('checkout_url')
             
-            # Create an inline button with the payment link
             markup = InlineKeyboardMarkup()
             markup.add(InlineKeyboardButton("👉 Click to Pay Now 👈", url=payment_url))
             
             bot.send_message(chat_id, "Ticket reserved! Please complete payment:", reply_markup=markup)
             
-        elif response.status_code == 400: # Handle Sold Out
+        elif response.status_code == 400:
             bot.send_message(chat_id, "⚠️ Sorry, this event is SOLD OUT!")
         else:
             bot.send_message(chat_id, "❌ Error generating payment link.")
@@ -146,8 +155,7 @@ def finalize_order(message):
     except Exception as e:
         bot.send_message(chat_id, f"Connection Error: {e}")
     
-    # Clear user session
     user_data.pop(chat_id, None)
 
-# 4. Start the bot
+# 5. Start the bot
 bot.infinity_polling()

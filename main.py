@@ -1,5 +1,7 @@
 import os
 import stripe
+import qrcode 
+import requests 
 from fastapi import FastAPI, HTTPException, Request, Form
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -8,6 +10,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 from core import db_manager
 from fastapi.middleware.cors import CORSMiddleware
+
 
 # Load environment variables from .env file
 load_dotenv()
@@ -129,25 +132,42 @@ def create_checkout_session(ticket: TicketRequest):
 @app.get("/payment_success", response_class=HTMLResponse)
 def payment_success(session_id: str, request: Request):
     """
-    Handles the redirect from Stripe after a successful payment.
-    Verifies the session and saves the ticket to the database.
+    Handles successful payment:
+    1. Verifies Stripe session.
+    2. Saves ticket to DB.
+    3. Generates QR Code.
+    4. Sends QR Code to user's Telegram.
     """
     try:
         # Verify payment status with Stripe
         session = stripe.checkout.Session.retrieve(session_id)
         
         if session.payment_status == 'paid':
-            # Retrieve user data from metadata
             data = session.metadata
             
-            # Save ticket to database (Final Step)
-            db_manager.add_ticket(
+            # 1. Save ticket to database
+            ticket_id = db_manager.add_ticket(
                 event_id=int(data['event_id']),
                 user_id=int(data['user_id']),
                 user_name=data['user_name'],
                 phone_number=data['phone_number']
             )
-            # Render the success page
+            
+            # 2. Get event details for the ticket
+            event = db_manager.get_event_by_id(int(data['event_id']))
+            
+            # 3. Generate QR Code
+            qr_path = generate_qr_code(ticket_id, event['name'], data['user_name'])
+            
+            # 4. Send QR Code to Telegram
+            caption = (
+                f"🎉 Payment Confirmed!\n"
+                f"Event: {event['name']}\n"
+                f"Ticket ID: #{ticket_id}\n\n"
+                f"Show this QR code at the entrance."
+            )
+            send_ticket_to_telegram(data['user_id'], qr_path, caption)
+
             return templates.TemplateResponse("success.html", {"request": request})
         else:
             return "Payment Failed or Pending."
@@ -211,3 +231,35 @@ def login(request: LoginRequest):
         return {"success": True, "message": "Login successful"}
     else:
         raise HTTPException(status_code=401, detail="Incorrect password")
+    
+    # --- Helper Functions ---
+
+def generate_qr_code(ticket_id: int, event_name: str, user_name: str):
+    """
+    Generates a QR code image for the ticket.
+    Saves it in the 'static' folder.
+    """
+    # Ensure static folder exists
+    if not os.path.exists("static"):
+        os.makedirs("static")
+        
+    # Data to encode in the QR (e.g., a verify URL or JSON data)
+    data = f"TICKET-ID:{ticket_id} | EVENT:{event_name} | OWNER:{user_name}"
+    
+    # Create QR image
+    qr = qrcode.make(data)
+    file_path = f"static/ticket_{ticket_id}.png"
+    qr.save(file_path)
+    return file_path
+
+def send_ticket_to_telegram(chat_id, file_path, caption):
+    """
+    Sends the generated QR code image to the user via Telegram API.
+    """
+    bot_token = os.getenv("TELEGRAM_TOKEN")
+    url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
+    
+    with open(file_path, "rb") as image_file:
+        files = {"photo": image_file}
+        data = {"chat_id": chat_id, "caption": caption}
+        requests.post(url, data=data, files=files)
