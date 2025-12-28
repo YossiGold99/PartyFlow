@@ -17,6 +17,7 @@ load_dotenv()
 
 app = FastAPI()
 
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # In production, change this to the specific domain
@@ -80,6 +81,12 @@ def read_root():
 def get_events_api():
     """Returns a list of all events (used by the Bot)."""
     return {"events": db_manager.get_events()}
+
+@app.get("/api/tickets/{user_id}")
+def get_tickets_api(user_id: int):
+    # This calls the function inside core/db_manager.py
+    tickets = db_manager.get_user_tickets(user_id)
+    return {"tickets": tickets}
 
 # --- Stripe Payment Logic ---
 

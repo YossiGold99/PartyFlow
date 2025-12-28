@@ -1,7 +1,9 @@
 import os
 import telebot 
 import requests
-import phonenumbers # <--- חשוב לוודא שזה קיים
+import phonenumbers 
+import qrcode 
+from io import BytesIO 
 from telebot import types  
 from dotenv import load_dotenv
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -27,7 +29,7 @@ user_data = {}
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    bot.reply_to(message, "Welcome to PartyFlow! 🥳\nUse /events to see upcoming parties.")
+    bot.reply_to(message, "Welcome to PartyFlow! 🥳\nUse /events to see upcoming parties.\nUse /my_tickets to view your tickets.")
 
 @bot.message_handler(commands=['events'])
 def list_events(message):
@@ -67,6 +69,57 @@ def list_events(message):
     except Exception as e:
         bot.reply_to(message, f"Connection failed: {e}")
 
+# --- New Command: View My Tickets ---
+
+@bot.message_handler(commands=['my_tickets'])
+def my_tickets(message):
+    chat_id = message.chat.id
+    
+    try:
+        if not API_URL:
+            bot.reply_to(message, "Configuration Error: API_URL missing.")
+            return
+
+        # Request tickets from server
+        response = requests.get(f"{API_URL}/api/tickets/{chat_id}")
+        
+        if response.status_code == 200:
+            data = response.json()
+            tickets = data.get('tickets', [])
+            
+            if not tickets:
+                bot.reply_to(message, "You don't have any tickets yet. Type /events to buy one! 🎟️")
+                return
+            
+            bot.send_message(chat_id, f"🎫 Found {len(tickets)} ticket(s):")
+            
+            for ticket in tickets:
+                # --- The Fix: Using 'name' instead of 'event_name' ---
+                caption = (
+                    f"🎟️ **Ticket #{ticket['id']}**\n"
+                    f"🎉 Event: {ticket['name']}\n" 
+                    f"📅 Date: {ticket['date']}\n"
+                    f"📍 Location: {ticket['location']}"
+                )
+                
+                # Generate QR Code
+                qr_data = f"TICKET-ID:{ticket['id']} | OWNER:{chat_id}"
+                qr_img = qrcode.make(qr_data)
+                
+                # Save to memory buffer
+                bio = BytesIO()
+                qr_img.save(bio, 'PNG')
+                bio.seek(0)
+                
+                # Send photo
+                bot.send_photo(chat_id, bio, caption=caption, parse_mode="markdown")
+                
+        else:
+            bot.reply_to(message, "Error fetching tickets from server.")
+            
+    except Exception as e:
+        bot.reply_to(message, f"Error: {e}")
+
 # --- Smart Registration Flow ---
 
 # Step 1: User clicks "buy"
@@ -91,7 +144,7 @@ def ask_phone(message):
     
     bot.register_next_step_handler(msg, validate_phone) 
 
-# Step 3: Validate the phone number (הפונקציה החדשה)
+# Step 3: Validate the phone number
 def validate_phone(message):
     chat_id = message.chat.id
     phone_input = message.text
@@ -103,10 +156,10 @@ def validate_phone(message):
         # 2. Check if valid
         if not phonenumbers.is_valid_number(parsed_number):
             msg = bot.send_message(chat_id, "❌ Invalid number. Please try again (e.g., 0501234567):")
-            bot.register_next_step_handler(msg, validate_phone) # Loop back if error
+            bot.register_next_step_handler(msg, validate_phone) 
             return
 
-        # 3. Format nicely (Optional)
+        # 3. Format nicely
         formatted_phone = phonenumbers.format_number(parsed_number, phonenumbers.PhoneNumberFormat.E164)
         
         # Save valid phone and proceed
@@ -114,12 +167,11 @@ def validate_phone(message):
 
     except phonenumbers.NumberParseException:
         msg = bot.send_message(chat_id, "❌ That doesn't look like a phone number. Try again:")
-        bot.register_next_step_handler(msg, validate_phone) # Loop back if error
+        bot.register_next_step_handler(msg, validate_phone)
 
 # Step 4: Finalize purchase with server
 def finalize_order(message, valid_phone):
     chat_id = message.chat.id
-    # We use the valid_phone passed from the previous function
     
     current_user = user_data.get(chat_id)
     if not current_user:
