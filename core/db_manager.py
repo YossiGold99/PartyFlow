@@ -155,3 +155,23 @@ def get_user_tickets(user_id):
     rows = cursor.fetchall()
     conn.close()
     return [dict(row) for row in rows]
+
+
+def get_events_by_date(target_date):
+    # Returns all events happening on a specific date (format: YYYY-MM-DD).
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM events WHERE date = ?", (target_date,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+def get_users_with_tickets_for_event(event_id):
+    #Returns a list of user_ids that have a ticket for a specific event.
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT user_id FROM tickets WHERE event_id = ?", (event_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [row[0] for row in rows]

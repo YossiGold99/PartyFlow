@@ -10,6 +10,9 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 from core import db_manager
 from fastapi.middleware.cors import CORSMiddleware
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from datetime import date
+import asyncio
 
 
 # Load environment variables from .env file
@@ -87,6 +90,66 @@ def get_tickets_api(user_id: int):
     # This calls the function inside core/db_manager.py
     tickets = db_manager.get_user_tickets(user_id)
     return {"tickets": tickets}
+
+# --- Automatic Reminder Logic ---
+
+scheduler = AsyncIOScheduler()
+
+def check_and_send_reminders():
+    # Get today's date in YYYY-MM-DD format (matches our DB format)
+    today = date.today().isoformat()
+    print(" Scheduler running: chechking for events on {today}")
+
+    # 1.find events happening today
+    events = db_manager.get_events_by_date(today)
+
+    if not events:
+        print("   💤 No events today.")
+        return
+    
+    token = os.getenv("TELEGRAM_TOKEN")
+
+    # 2. For each event, notify ticket holders
+    for event in events:
+        print(f"   🎉 FOUND EVENT: {event['name']}! Sending reminders...")
+        user_ids = db_manager.get_users_with_tickets_for_event(event["id"])
+
+        for user_id in user_ids:
+            try:
+                msg = (
+                    f"Today is the day!\n\n"
+                    f"Get ready! **{event['name']}** is happening today.\n"
+                    f"Location: {event['location']}\n\n"
+                    f"See you there!"
+                )
+
+                # send direct message via Telegram API
+                requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={
+                    "chat_id": user_id, 
+                    "text": msg, 
+                    "parse_mode": "Markdown"
+                })
+                print(f"   ✅ Sent to {user_id}")
+
+                
+            except Exception as e:
+                print(f"Failed to send to {user_id}: {e}")
+
+#  --- Start the scheduler ---
+
+@app.on_event("startup")
+def start_scheduler():
+    # Option A: Run once immediately when server starts (For Testing)
+    # asyncio.create_task(check_and_send_reminders()) 
+    
+    # Option B: Run every day at 10:00 AM (Production)
+    scheduler.add_job(check_and_send_reminders, 'cron', hour=10, minute=0)
+    
+    # Option C: Run every 60 seconds (For Demo/Testing now)
+    # scheduler.add_job(check_and_send_reminders, 'interval', seconds=20)
+    
+    scheduler.start()
+    print("✅ Scheduler started (Checking every 10h)")
 
 # --- Stripe Payment Logic ---
 
