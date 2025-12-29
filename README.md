@@ -15,14 +15,16 @@ It combines a user-friendly **Telegram Bot** for customers, a professional **Web
 
 ### 🤖 For Users (Telegram Bot)
 * **Browse Events:** View upcoming parties with real-time details (Location, Date, Price).
-* **Smart Registration:** Interactive conversation flow to collect Name and Phone Number.
-* **💳 Secure Payments:** Integrated **Stripe Checkout** for secure credit card processing (Test Mode).
-* **Inventory Check:** Prevents overbooking automatically (Sold Out logic).
+* **🎫 My Tickets & QR:** Access purchased tickets instantly via `/my_tickets` with dynamic **QR Code generation** for entry.
+* **Smart Registration:** Interactive flow with **phone number validation** (Israel format).
+* **💳 Secure Payments:** Integrated **Stripe Checkout** for secure credit card processing.
+* **Sold Out Logic:** Prevents overbooking automatically.
 
-### 🖥️ For Admins (Web Dashboard)
+### 🖥️ For Admins & System
 * **Event Management:** Add new parties via a clean web interface.
-* **📊 Live Analytics:** Real-time stats on **Total Revenue**, **Tickets Sold**, and **Top Events**.
-* **Database:** Persistent storage using SQLite.
+* **⏰ Auto-Reminders:** Background task (**APScheduler**) sends automatic notifications to guests on the day of the event.
+* **📢 Broadcast System:** Capability to send mass announcements to all registered users.
+* **📊 Live Analytics:** Real-time stats on **Revenue**, **Tickets Sold**, and **Top Events**.
 
 ---
 
@@ -31,12 +33,39 @@ It combines a user-friendly **Telegram Bot** for customers, a professional **Web
 * **Backend:** FastAPI (Python)
 * **Database:** SQLite (Managed via custom `db_manager`)
 * **Payments:** Stripe API
-* **Frontend (Web):** Jinja2 Templates + Bootstrap 5 + Custom CSS
+* **Frontend (Web):** Jinja2 Templates + Bootstrap 5
 * **Frontend (Bot):** pyTelegramBotAPI (Telebot)
-* **HTTP Client:** Requests
+* **Automation:** APScheduler (Background tasks)
+* **Utilities:** `qrcode`, `phonenumbers`, `requests`
 
 ---
+## ⚙️ Installation & Setup
 
+1.  **Clone the repository:**
+    ```bash
+    git clone [https://github.com/YossiGold99/PartyFlow.git](https://github.com/YossiGold99/PartyFlow.git)
+    cd PartyFlow
+    ```
+
+2.  **Install Python Dependencies:**
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+3.  **Environment Variables:**
+    * Duplicate `.env.example` and rename it to `.env`.
+    * Add your Telegram Bot Token and other secrets.
+
+4.  **Run the Server:**
+    ```bash
+    uvicorn main:app --reload
+    ```
+
+5.  **Run the Bot:**
+    ```bash
+    python bot.py
+    ```
+---
 ## 📂 Project Structure
 
 ```text
@@ -51,7 +80,14 @@ PartyFlow/
 │   ├── dashboard.html      # HTML Admin Interface
 │   └── success.html        # Payment Success Page
 ├── bot.py                  # Telegram Bot Logic (Frontend 1)
-├── main.py                 # FastAPI Server (Backend)
-├── manage.py               # CLI tool for DB initialization
+├── main.py                 # FastAPI Server & Scheduler (Backend)
 ├── .env                    # Environment variables (Tokens & Keys)
 └── requirements.txt        # Python dependencies
+
+---
+
+## 👥 Authors
+* **Yossi Gold** - *Full Stack Developer*
+
+---
+*Created as a final project for Python Course 2025.*
