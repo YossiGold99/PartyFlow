@@ -73,6 +73,10 @@ class EventRequest(BaseModel):
     total_tickets: int
 # --- General Routes ---
 
+@app.get("/success", response_class=HTMLResponse)
+async def success_page(request: Request):
+    return templates.TemplateResponse("success.html", {"request": request})
+
 # API Endpoint for React Dashboard
 @app.get("/api/stats")
 def get_dashboard_stats():
@@ -155,6 +159,8 @@ def check_and_send_reminders():
                 
             except Exception as e:
                 print(f"Failed to send to {user_id}: {e}")
+
+
 
 #  --- Start the scheduler ---
 
