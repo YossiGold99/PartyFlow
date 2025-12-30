@@ -1,7 +1,9 @@
 import os
 import stripe
 import qrcode 
-import requests 
+import requests
+import secrets
+import asyncio
 from fastapi import FastAPI, HTTPException, Request, Form
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -12,7 +14,8 @@ from core import db_manager
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from datetime import date
-import asyncio
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 
 # Load environment variables from .env file
@@ -20,7 +23,25 @@ load_dotenv()
 
 app = FastAPI()
 
+security = HTTPBasic()
 
+def get_current_username(credentials: HTTPBasicCredentials = Depends(security)):
+    """
+    Validates the username and password using secure constant-time comparison.
+    Change 'admin' and '1234' to your desired credentials.
+    """
+    correct_username = secrets.compare_digest(credentials.username, "admin")
+    correct_password = secrets.compare_digest(credentials.password, "1234")
+
+    if not (correct_username and correct_password):
+        raise HTTPException(
+            status_code = status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
+
+# Enable CORS for React frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # In production, change this to the specific domain
@@ -251,7 +272,7 @@ def payment_cancel():
 
 # --- Admin Dashboard Routes ---
 
-@app.get("/dashboard", response_class=HTMLResponse)
+@app.get("/dashboard", response_class=HTMLResponse, dependencies=[Depends(get_current_username)])
 def show_dashboard(request: Request):
     """Renders the Admin Dashboard with real-time analytics."""
     events = db_manager.get_events()
@@ -269,7 +290,7 @@ def show_dashboard(request: Request):
         "stats": stats
     })
 
-@app.post("/dashboard/add")
+@app.post("/dashboard/add", dependencies=[Depends(get_current_username)])
 def add_event_web(
     name: str = Form(...), 
     date: str = Form(...), 

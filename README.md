@@ -86,7 +86,7 @@ PartyFlow/
 
 ---
 
-## 👥 Authors
+** 👥 Authors
 * **Yossi Gold** - *Full Stack Developer*
 
 ---
