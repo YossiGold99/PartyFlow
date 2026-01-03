@@ -3,27 +3,37 @@ import telebot
 import requests
 import phonenumbers 
 import qrcode 
+import logging
 from io import BytesIO 
 from telebot import types  
 from dotenv import load_dotenv
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-# 1. Load secrets from .env file
+# --- Configuration & Setup ---
+
+# 1. Configure Logging
+logging.basicConfig(
+    level=logging.INFO, 
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+
+# 2. Load secrets from .env file
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 API_URL = os.getenv("API_URL")
 
-# 2. Check if token exists
+# 3. Check if token exists
 if not TELEGRAM_TOKEN:
-    print("Error: No TELEGRAM_TOKEN found in .env file")
+    logging.error("No TELEGRAM_TOKEN found in .env file")
     exit()
 
-# 3. Initialize the bot
+# 4. Initialize the bot
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
-print("Bot is running...")
+logging.info("Bot is running...")
 
-# Temporary dictionary to store data
+# Temporary dictionary to store data (In production, use Redis or DB)
 user_data = {}
+
 
 # --- Standard commands ---
 
@@ -69,7 +79,8 @@ def list_events(message):
     except Exception as e:
         bot.reply_to(message, f"Connection failed: {e}")
 
-# --- New Command: View My Tickets ---
+
+# --- Command: View My Tickets ---
 
 @bot.message_handler(commands=['my_tickets'])
 def my_tickets(message):
@@ -94,7 +105,6 @@ def my_tickets(message):
             bot.send_message(chat_id, f"🎫 Found {len(tickets)} ticket(s):")
             
             for ticket in tickets:
-                # --- The Fix: Using 'name' instead of 'event_name' ---
                 caption = (
                     f"🎟️ **Ticket #{ticket['id']}**\n"
                     f"🎉 Event: {ticket['name']}\n" 
@@ -119,6 +129,7 @@ def my_tickets(message):
             
     except Exception as e:
         bot.reply_to(message, f"Error: {e}")
+
 
 # --- Smart Registration Flow ---
 
@@ -208,6 +219,7 @@ def finalize_order(message, valid_phone):
         bot.send_message(chat_id, f"Connection Error: {e}")
     
     user_data.pop(chat_id, None)
+
 
 # 5. Start the bot
 bot.infinity_polling()
