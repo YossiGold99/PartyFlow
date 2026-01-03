@@ -1,5 +1,7 @@
 # 🎉 PartyFlow - Event Management & Ticketing System
 
+![Dashboard Preview](static/dashboard_preview.png)
+
 **PartyFlow** is a comprehensive Full Stack solution for managing party lines and ticket sales.
 It combines a user-friendly **Telegram Bot** for customers, a professional **Web Dashboard** for admins, and secure payment processing via **Stripe**.
 
