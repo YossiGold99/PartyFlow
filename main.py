@@ -3,7 +3,6 @@ import stripe
 import qrcode 
 import requests
 import secrets
-import asyncio
 from fastapi import FastAPI, HTTPException, Request, Form
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -306,6 +305,50 @@ def add_event_web(
 ):
     """Adds a new event via the web form."""
     db_manager.add_event(name, date, location, price, total_tickets)
+    return RedirectResponse(url="/dashboard", status_code=303)
+
+
+@app.post("/dashboard/broadcast", dependencies=[Depends(get_current_username)])
+def broadcast_message(
+    event_id: int = Form(...), 
+    message: str = Form(...)
+):
+    """
+    Sends a broadcast message to all users who purchased a ticket for a specific event.
+    """
+    # 1. Fetch the event details (to include the name in the message)
+    event = db_manager.get_event_by_id(event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    
+    # 2. Retrieve the list of user IDs who have tickets for this event
+    user_ids = db_manager.get_users_with_tickets_for_event(event_id)
+    
+    # 3. Prepare Telegram API URL
+    bot_token = os.getenv("TELEGRAM_TOKEN")
+    send_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    
+    count = 0
+    # 4. Loop through users and send the message
+    for user_id in user_ids:
+        try:
+            # Format the message sent to the user
+            full_text = (
+                f"📢 **Update regarding {event['name']}**\n\n"
+                f"{message}\n\n"
+                f"-- PartyFlow Management"
+            )
+            
+            requests.post(send_url, json={
+                "chat_id": user_id, 
+                "text": full_text,
+                "parse_mode": "Markdown"
+            })
+            count += 1
+        except Exception as e:
+            print(f"Failed to send to {user_id}: {e}")
+            
+    # Redirect back to the dashboard upon completion
     return RedirectResponse(url="/dashboard", status_code=303)
 
 # --- Authentication Model ---
