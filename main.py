@@ -93,7 +93,8 @@ class LoginRequest(BaseModel):
 
 @app.get("/")
 def read_root():
-    return {"message": "PartyBot API is running with Stripe integration!"}
+    """Redirects the homepage directly to the dashboard."""
+    return RedirectResponse(url="/dashboard")
 
 @app.get("/success", response_class=HTMLResponse)
 async def success_page(request: Request):
