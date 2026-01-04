@@ -4,87 +4,115 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>PartyFlow Admin</title>
+        <title>PartyFlow Pro</title>
+
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
         <link href="{{ url_for('static', path='/style.css') }}" rel="stylesheet">
     </head>
 
     <body>
 
-        <div class="header text-center">
-            <h1>🎉 PartyFlow Dashboard</h1>
-            <p>Manage your events and tickets</p>
-        </div>
-
-        <div class="container mb-5" style="margin-top: -50px;">
-            <div class="row text-center">
-
-                <div class="col-md-4">
-                    <div class="card p-3">
-                        <h5 class="text-muted">💰 Total Revenue</h5>
-                        <h2 class="text-success">{{ stats.total_revenue }} ₪</h2>
-                    </div>
-                </div>
-
-                <div class="col-md-4">
-                    <div class="card p-3">
-                        <h5 class="text-muted">🎟️ Tickets Sold</h5>
-                        <h2 class="text-primary">{{ stats.tickets_sold }}</h2>
-                    </div>
-                </div>
-
-                <div class="col-md-4">
-                    <div class="card p-3">
-                        <h5 class="text-muted">🔥 Top Event</h5>
-                        <h2 class="text-danger">{{ stats.top_event }}</h2>
-                    </div>
-                </div>
-
-            </div>
-        </div>
+        <header class="page-header">
+            <h1 class="title">
+                <span>🎉</span> PartyFlow Pro
+            </h1>
+            <p class="subtitle">Event Management Workspace</p>
+        </header>
 
         <div class="container">
-            <div class="row">
 
+            <div class="row mb-4 g-3">
                 <div class="col-md-4">
-                    <div class="card p-4 mb-4">
-                        <h4>➕ Add New Event</h4>
-                        <form action="/dashboard/add" method="post">
-                            <div class="mb-3">
+                    <div class="card h-100">
+                        <div class="card-body d-flex align-items-center gap-3">
+                            <div class="fs-1">💰</div>
+                            <div>
+                                <div class="card-subtitle mt-0">Total Revenue</div>
+                                <div class="fs-4 fw-bold text-dark">{{ stats.total_revenue }} ₪</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-body d-flex align-items-center gap-3">
+                            <div class="fs-1">🎟️</div>
+                            <div>
+                                <div class="card-subtitle mt-0">Tickets Sold</div>
+                                <div class="fs-4 fw-bold text-dark">{{ stats.tickets_sold }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-body d-flex align-items-center gap-3">
+                            <div class="fs-1">🔥</div>
+                            <div>
+                                <div class="card-subtitle mt-0">Top Event</div>
+                                <div class="fs-4 fw-bold text-dark">{{ stats.top_event }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid">
+
+                <div class="card">
+                    <div class="card-head">
+                        <h2 class="card-title">✨ New Event</h2>
+                        <p class="card-subtitle">Create a new party page</p>
+                    </div>
+                    <div class="card-body">
+                        <form action="/dashboard/add" method="post" class="form">
+                            <div class="field">
                                 <label>Event Name</label>
-                                <input type="text" name="name" class="form-control" required>
+                                <input type="text" name="name" placeholder="e.g. Summer Vibes 2026" required>
                             </div>
-                            <div class="mb-3">
-                                <label>Date (YYYY-MM-DD)</label>
-                                <input type="text" name="date" class="form-control" placeholder="2025-12-31" required>
+
+                            <div class="field">
+                                <label>Date</label>
+                                <input type="text" name="date" placeholder="YYYY-MM-DD" required>
                             </div>
-                            <div class="mb-3">
+
+                            <div class="field">
                                 <label>Location</label>
-                                <input type="text" name="location" class="form-control" required>
+                                <input type="text" name="location" placeholder="e.g. Tel Aviv Port" required>
                             </div>
-                            <div class="mb-3">
-                                <label>Price (NIS)</label>
-                                <input type="number" name="price" step="0.1" class="form-control" required>
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                                <div class="field">
+                                    <label>Price (₪)</label>
+                                    <input type="number" name="price" step="0.1" placeholder="0.00" required>
+                                </div>
+                                <div class="field">
+                                    <label>Capacity</label>
+                                    <input type="number" name="total_tickets" placeholder="Max guests" required>
+                                </div>
                             </div>
-                            <div class="mb-3">
-                                <label>Total Tickets</label>
-                                <input type="number" name="total_tickets" class="form-control" required>
-                            </div>
-                            <button type="submit" class="btn btn-primary w-100">Create Event</button>
+
+                            <button type="submit" class="btn btn-primary mt-12">
+                                Publish Event
+                            </button>
                         </form>
                     </div>
                 </div>
 
-                <div class="col-md-8">
-                    <div class="card p-4">
-                        <h4>📅 Active Events</h4>
-                        <table class="table table-hover mt-3">
+                <div class="card">
+                    <div class="card-head">
+                        <h2 class="card-title">📅 Active Events</h2>
+                        <p class="card-subtitle">Manage your ongoing sales</p>
+                    </div>
+
+                    <div class="table-wrap">
+                        <table>
                             <thead>
                                 <tr>
                                     <th>ID</th>
-                                    <th>Name</th>
+                                    <th>Event</th>
                                     <th>Date</th>
-                                    <th>Location</th>
+                                    <th>Loc</th>
                                     <th>Price</th>
                                     <th>Actions</th>
                                 </tr>
@@ -92,16 +120,21 @@
                             <tbody>
                                 {% for event in events %}
                                 <tr>
-                                    <td>{{ event.id }}</td>
-                                    <td><strong>{{ event.name }}</strong></td>
-                                    <td>{{ event.date }}</td>
-                                    <td>{{ event.location }}</td>
-                                    <td>{{ event.price }} ₪</td>
+                                    <td class="col-id">#{{ event.id }}</td>
                                     <td>
-                                        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal"
-                                            data-bs-target="#broadcastModal"
+                                        <div style="font-weight: 600;">{{ event.name }}</div>
+                                    </td>
+                                    <td class="col-date">{{ event.date }}</td>
+                                    <td>{{ event.location }}</td>
+                                    <td class="col-price">
+                                        <span class="badge">{{ event.price }} ₪</span>
+                                    </td>
+                                    <td>
+                                        <button class="btn"
+                                            style="padding: 6px 12px; font-size: 12px; background: #eff6ff; color: #2563eb;"
+                                            data-bs-toggle="modal" data-bs-target="#broadcastModal"
                                             onclick="setEventId('{{ event.id }}', '{{ event.name }}')">
-                                            📢 Update Users
+                                            📢 Update
                                         </button>
                                     </td>
                                 </tr>
@@ -110,47 +143,47 @@
                         </table>
                     </div>
                 </div>
-
             </div>
         </div>
 
         <div class="modal fade" id="broadcastModal" tabindex="-1" aria-hidden="true">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <form action="/dashboard/broadcast" method="post">
-                        <div class="modal-header">
-                            <h5 class="modal-title">📢 Send Update to Attendees</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                        </div>
-                        <div class="modal-body">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content"
+                    style="border-radius: 16px; border: none; box-shadow: 0 20px 60px rgba(0,0,0,0.1);">
+                    <div class="modal-header border-0 pb-0">
+                        <h5 class="modal-title fw-bold">📢 Send Broadcast</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <form action="/dashboard/broadcast" method="post" class="form">
                             <input type="hidden" name="event_id" id="modalEventId">
+                            <p class="help mb-3">Sending to attendees of: <strong id="modalEventName"
+                                    style="color: var(--primary);"></strong></p>
 
-                            <p>Sending message to attendees of: <strong id="modalEventName"></strong></p>
-
-                            <div class="mb-3">
-                                <label for="messageText" class="form-label">Message:</label>
-                                <textarea class="form-control" name="message" id="messageText" rows="4" required
-                                    placeholder="Example: The event starts 1 hour late due to rain..."></textarea>
+                            <div class="field">
+                                <label>Message</label>
+                                <textarea name="message" rows="4" placeholder="Write your update here..."
+                                    required></textarea>
                             </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                            <button type="submit" class="btn btn-primary">Send Broadcast 🚀</button>
-                        </div>
-                    </form>
+
+                            <div class="d-flex justify-content-end gap-2 mt-3">
+                                <button type="button" class="btn" data-bs-dismiss="modal"
+                                    style="width: auto; background: #f1f5f9; color: #64748b;">Cancel</button>
+                                <button type="submit" class="btn btn-primary" style="width: auto;">Send Now</button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>
 
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
         <script>
             function setEventId(id, name) {
                 document.getElementById('modalEventId').value = id;
                 document.getElementById('modalEventName').innerText = name;
             }
         </script>
-
     </body>
 
 </html>
