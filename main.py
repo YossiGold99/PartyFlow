@@ -142,16 +142,24 @@ def login(request: LoginRequest):
 # --- Dashboard Routes (Admin) ---
 
 @app.get("/dashboard", response_class=HTMLResponse, dependencies=[Depends(get_current_username)])
-def show_dashboard(request: Request):
-    """Renders the Admin Dashboard with real-time analytics."""
-    events = db_manager.get_events()
+def show_dashboard(request: Request, page: int = 1, q: str = ""):
+    """Renders the Admin Dashboard with Pagination & Search."""
+    
+    events, total_pages = db_manager.get_events_paginated(page=page, per_page=5, search_query=q)
+    
     stats = {
         "total_revenue": db_manager.get_total_revenue(),
         "tickets_sold": db_manager.get_total_tickets_sold(),
         "top_event": db_manager.get_top_event()
     }
+    
     return templates.TemplateResponse("dashboard.html", {
-        "request": request, "events": events, "stats": stats
+        "request": request, 
+        "events": events, 
+        "stats": stats,
+        "current_page": page,
+        "total_pages": total_pages,
+        "search_query": q
     })
 
 @app.post("/dashboard/add", dependencies=[Depends(get_current_username)])

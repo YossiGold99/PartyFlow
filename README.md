@@ -86,10 +86,9 @@ PartyFlow/
 ├── .env                    # Environment variables (Tokens & Keys)
 └── requirements.txt        # Python dependencies
 
----
 
-** 👥 Authors
-* **Yossi Gold** - *Full Stack Developer*
 
----
-*Created as a final project for Python Course 2025.*
+👥 Authors
+Yossi Gold - Full Stack Developer
+
+Created as a final project for Python Course 2025.אוו 

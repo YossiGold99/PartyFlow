@@ -136,8 +136,6 @@ def get_top_event():
     conn.close()
     return result[0] if result else "No Sales Yet"
 
-# --- New Function ---
-
 def get_user_tickets(user_id):
     """Fetches all tickets for a specific user ID."""
     conn = sqlite3.connect(DB_NAME)
@@ -155,7 +153,6 @@ def get_user_tickets(user_id):
     rows = cursor.fetchall()
     conn.close()
     return [dict(row) for row in rows]
-
 
 def get_events_by_date(target_date):
     # Returns all events happening on a specific date (format: YYYY-MM-DD).
@@ -175,3 +172,37 @@ def get_users_with_tickets_for_event(event_id):
     rows = cursor.fetchall()
     conn.close()
     return [row[0] for row in rows]
+
+# --- Pagination & Search Function ---
+
+def get_events_paginated(page=1, per_page=5, search_query=""):
+    """Fetches events sorted by ID (Ascending) with pagination and search."""
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    offset = (page - 1) * per_page
+    
+    if search_query:
+        query = "SELECT * FROM events WHERE name LIKE ? ORDER BY id ASC LIMIT ? OFFSET ?"
+        params = (f"%{search_query}%", per_page, offset)
+        
+        count_query = "SELECT COUNT(*) FROM events WHERE name LIKE ?"
+        count_params = (f"%{search_query}%",)
+    else:
+        query = "SELECT * FROM events ORDER BY id ASC LIMIT ? OFFSET ?"
+        params = (per_page, offset)
+        
+        count_query = "SELECT COUNT(*) FROM events"
+        count_params = ()
+
+    cursor.execute(query, params)
+    events = [dict(row) for row in cursor.fetchall()]
+
+    cursor.execute(count_query, count_params)
+    total_items = cursor.fetchone()[0]
+    total_pages = (total_items + per_page - 1) // per_page
+
+    conn.close()
+    
+    return events, total_pages
