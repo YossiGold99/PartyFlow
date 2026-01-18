@@ -37,7 +37,6 @@ logging.basicConfig(
 app = FastAPI()
 
 # 4. Security Setup (Cookie Based)
-# קריאת הסיסמה מהסביבה. אם לא מוגדרת, ברירת המחדל היא 'admin' (לא מומלץ לייצור)
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 
 def get_current_username(request: Request):
@@ -47,9 +46,7 @@ def get_current_username(request: Request):
     """
     user = request.cookies.get("session_user")
     if not user:
-        # אם אין עוגייה, זרוק שגיאה שתגרום להפניה (או טפל בהפניה בדשבורד)
-        # בגישה פשוטה יותר: אם זה API, זרוק 401. אם זה דפדפן, הפנה ללוגין.
-        # כאן אנחנו מפנים ללוגין:
+
         raise HTTPException(
             status_code=status.HTTP_307_TEMPORARY_REDIRECT,
             headers={"Location": "/login"}
@@ -145,14 +142,12 @@ async def success_page(request: Request):
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
     """Renders the login page."""
-    # אם אין לך קובץ login.html, צור אותו בתיקיית templates
     return templates.TemplateResponse("login.html", {"request": request})
 
 @app.post("/login")
 async def login(request: Request, username: str = Form(...), password: str = Form(...)):
     """Validates credentials and sets a session cookie."""
     
-    # בדיקה מול הסיסמה מה-ENV
     if not ADMIN_PASSWORD:
         return templates.TemplateResponse("login.html", {
             "request": request, 
@@ -161,7 +156,6 @@ async def login(request: Request, username: str = Form(...), password: str = For
 
     if username == "admin" and password == ADMIN_PASSWORD:
         response = RedirectResponse(url="/dashboard", status_code=303)
-        # קביעת עוגייה (Cookie)
         response.set_cookie(key="session_user", value=username)
         return response
     
@@ -209,7 +203,6 @@ def get_tickets_api(user_id: int):
 
 @app.post("/api/login")
 def login_api(request: LoginRequest):
-    # שימוש בסיסמה המאובטחת גם ל-API
     if request.password == ADMIN_PASSWORD:
         return {"success": True, "message": "Login successful"}
     else:
