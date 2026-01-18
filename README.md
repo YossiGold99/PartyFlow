@@ -1,6 +1,7 @@
 # 🎉 PartyFlow - Event Management & Ticketing System
 
-![Dashboard Preview](static/dashboard_preview.png)
+<!-- ![Dashboard Preview](static/dashboard_preview.png)
+![Dashboard Preview](static/dark_dashboard_preview.png) -->
 
 **PartyFlow** is a comprehensive Full Stack solution for managing party lines and ticket sales.
 It combines a user-friendly **Telegram Bot** for customers, a professional **Web Dashboard** for admins, and secure payment processing via **Stripe**.
@@ -68,7 +69,7 @@ It combines a user-friendly **Telegram Bot** for customers, a professional **Web
     ```bash
     python bot.py
     ```
----
+
 ## 📂 Project Structure
 
 ```text
@@ -87,9 +88,20 @@ PartyFlow/
 ├── main.py                 # FastAPI Server, Async Tasks & Scheduler
 ├── .env                    # Environment variables (Tokens & Keys)
 └── requirements.txt        # Python dependencies
+```
 
-👥 Authors
-Yossi Gold - Full Stack Developer
+---
 
+## 📸 Screenshots
+
+| Light Mode | Dark Mode |
+|:----------:|:---------:|
+| ![Light](static/dashboard_preview.png) | ![Dark](static/dark_dashboard_preview.png) |
+
+---
+*Developed by Yossi Gold - Full Stack Developer*
+---
 Created as a final project for Python Course 2025
+---
+
 
