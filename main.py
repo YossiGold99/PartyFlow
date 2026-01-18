@@ -4,13 +4,14 @@ import qrcode
 import requests
 import secrets
 import logging
+import aiohttp
 import asyncio
 from datetime import date
 from dotenv import load_dotenv
 from pydantic import BaseModel
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 # FastAPI Imports
-from fastapi import FastAPI, HTTPException, Request, Form, Depends, status
+from fastapi import FastAPI, HTTPException, Request, Form, Depends, status, BackgroundTasks
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -88,6 +89,48 @@ class EventRequest(BaseModel):
 class LoginRequest(BaseModel):
     password: str
 
+async def send_telegram_broadcast_task(user_ids, message, event_name):
+    """
+    Asynchronous version: Sends messages in parallel (non-blocking).
+    Drastically reduces wait time for large user lists (e.g., 150+ users).
+    """
+    bot_token = os.getenv("TELEGRAM_TOKEN")
+    send_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    
+    logging.info(f"🚀 Starting FAST broadcast for '{event_name}' to {len(user_ids)} users...")
+
+    # Create an async session
+    async with aiohttp.ClientSession() as session:
+        tasks = []
+        for user_id in user_ids:
+            full_text = (
+                f"📢 **Update regarding {event_name}**\n\n"
+                f"{message}\n\n"
+                f"-- PartyFlow Management"
+            )
+            
+            payload = {
+                "chat_id": user_id, 
+                "text": full_text, 
+                "parse_mode": "Markdown"
+            }
+            
+            # Create a task for the POST request but don't wait for it yet
+            task = session.post(send_url, json=payload)
+            tasks.append(task)
+        
+        # Execute all tasks concurrently and gather results
+        # return_exceptions=True prevents one failure from stopping the whole batch
+        responses = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Log success count (for debugging purposes)
+        success_count = 0
+        for response in responses:
+            if not isinstance(response, Exception) and response.status == 200:
+                success_count += 1
+                
+    logging.info(f"✅ Fast Broadcast complete! Sent to {success_count}/{len(user_ids)} users.")
+
 
 # --- Routes ---
 
@@ -143,10 +186,28 @@ def login(request: LoginRequest):
 
 @app.get("/dashboard", response_class=HTMLResponse, dependencies=[Depends(get_current_username)])
 def show_dashboard(request: Request, page: int = 1, q: str = ""):
-    """Renders the Admin Dashboard with Pagination & Search."""
+    """Renders the Admin Dashboard with Pagination, Search, and Live Capacity Stats."""
     
-    events, total_pages = db_manager.get_events_paginated(page=page, per_page=5, search_query=q)
+    # 1. Retrieving events from the database
+    raw_events, total_pages = db_manager.get_events_paginated(page=page, per_page=5, search_query=q)
     
+    # 2. Calculate statistics for each event (sales + remaining)
+    events_processed = []
+    for event in raw_events:
+        e_dict = dict(event) #Convert to a dictionary so we can edit
+        
+        # Checking how many were actually sold
+        sold = db_manager.get_tickets_sold(e_dict['id'])
+        total = e_dict['total_tickets']
+        
+        # Adding data to an object
+        e_dict['sold'] = sold
+        e_dict['remaining'] = total - sold
+        e_dict['percent'] = int((sold / total) * 100) if total > 0 else 0
+        
+        events_processed.append(e_dict)
+
+    # 3. General data
     stats = {
         "total_revenue": db_manager.get_total_revenue(),
         "tickets_sold": db_manager.get_total_tickets_sold(),
@@ -155,7 +216,7 @@ def show_dashboard(request: Request, page: int = 1, q: str = ""):
     
     return templates.TemplateResponse("dashboard.html", {
         "request": request, 
-        "events": events, 
+        "events": events_processed,  
         "stats": stats,
         "current_page": page,
         "total_pages": total_pages,
@@ -174,34 +235,22 @@ def add_event_web(
     return RedirectResponse(url="/dashboard", status_code=303)
 
 @app.post("/dashboard/broadcast", dependencies=[Depends(get_current_username)])
-def broadcast_message(event_id: int = Form(...), message: str = Form(...)):
+def broadcast_message(
+    background_tasks: BackgroundTasks,  # <--- הוספנו את זה לטיפול ברקע
+    event_id: int = Form(...), 
+    message: str = Form(...)
+):
     """Sends a broadcast message to all users who purchased a ticket."""
     event = db_manager.get_event_by_id(event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
     
     user_ids = db_manager.get_users_with_tickets_for_event(event_id)
-    bot_token = os.getenv("TELEGRAM_TOKEN")
-    send_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     
-    count = 0
-    for user_id in user_ids:
-        try:
-            full_text = (
-                f"📢 **Update regarding {event['name']}**\n\n"
-                f"{message}\n\n"
-                f"-- PartyFlow Management"
-            )
-            requests.post(send_url, json={
-                "chat_id": user_id, 
-                "text": full_text, 
-                "parse_mode": "Markdown"
-            })
-            count += 1
-        except Exception as e:
-            logging.error(f"Failed to send broadcast to {user_id}: {e}")
-            
-    logging.info(f"Broadcast sent to {count} users for event {event_id}")
+    # במקום לשלוח כאן ולתקוע את הדפדפן, אנחנו מוסיפים משימת רקע
+    background_tasks.add_task(send_telegram_broadcast_task, user_ids, message, event['name'])
+    
+    # החזרת תשובה מיידית למשתמש
     return RedirectResponse(url="/dashboard", status_code=303)
 
 
@@ -317,15 +366,7 @@ def check_and_send_reminders():
 
 @app.on_event("startup")
 def start_scheduler():
-    # Option A: Run once immediately when server starts (For Testing)
-    # asyncio.create_task(check_and_send_reminders()) 
-    
-    # Option B: Run every day at 10:00 AM (Production)
     scheduler.add_job(check_and_send_reminders, 'cron', hour=10, minute=0)
-    
-    # Option C: Run every 60 seconds (For Demo/Testing now)
-    # scheduler.add_job(check_and_send_reminders, 'interval', seconds=60)
-    
     scheduler.start()
     logging.info("✅ Scheduler started")
 
