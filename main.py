@@ -17,7 +17,6 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-# Note: We removed HTTPBasic imports as we switched to Cookies
 
 # Core Logic
 from core import db_manager
@@ -212,10 +211,20 @@ def login_api(request: LoginRequest):
 # --- Dashboard Routes (Admin) ---
 
 @app.get("/dashboard", response_class=HTMLResponse, dependencies=[Depends(get_current_username)])
-def show_dashboard(request: Request, page: int = 1, q: str = ""):
-    """Renders the Admin Dashboard with Pagination, Search, and Live Capacity Stats."""
+def show_dashboard(request: Request, page: int = 1, q: str = "", view: str = "active"):
+    """
+    view='active' -> מציג רגיל
+    view='archived' -> מציג את הארכיון
+    """
     
-    raw_events, total_pages = db_manager.get_events_paginated(page=page, per_page=5, search_query=q)
+    is_active_status = 0 if view == 'archived' else 1
+    
+    raw_events, total_pages = db_manager.get_events_paginated(
+        page=page, 
+        per_page=5, 
+        search_query=q,
+        active_status=is_active_status  
+    )
     
     events_processed = []
     for event in raw_events:
@@ -239,8 +248,14 @@ def show_dashboard(request: Request, page: int = 1, q: str = ""):
         "stats": stats,
         "current_page": page,
         "total_pages": total_pages,
-        "search_query": q
+        "search_query": q,
+        "view_mode": view  
     })
+
+@app.post("/dashboard/restore/{event_id}", dependencies=[Depends(get_current_username)])
+def restore_event_route(event_id: int):
+    db_manager.restore_event(event_id)
+    return RedirectResponse(url="/dashboard?view=archived", status_code=303)
 
 @app.post("/dashboard/add", dependencies=[Depends(get_current_username)])
 def add_event_web(
@@ -268,6 +283,10 @@ def broadcast_message(
     
     return RedirectResponse(url="/dashboard", status_code=303)
 
+@app.post("/dashboard/archive/{event_id}", dependencies=[Depends(get_current_username)])
+def archive_event_route(event_id: int):
+    db_manager.archive_event(event_id)
+    return RedirectResponse(url="/dashboard", status_code=303)
 
 # --- Stripe Payment Logic ---
 

@@ -123,12 +123,28 @@
 
                 <div class="col-lg-8">
                     <div class="card h-100 d-flex flex-column">
+
                         <div class="card-head d-flex justify-content-between align-items-center flex-wrap gap-3">
                             <div>
-                                <h2 class="card-title">📅 Active Events</h2>
-                                <p class="card-subtitle">Manage your ongoing sales</p>
+                                <h2 class="card-title">
+                                    {% if view_mode == 'archived' %}
+                                    📦 Archived Events
+                                    {% else %}
+                                    📅 Active Events
+                                    {% endif %}
+                                </h2>
+                                <p class="card-subtitle">
+                                    {% if view_mode == 'archived' %}
+                                    <a href="/dashboard" class="text-decoration-none">← Back to Active Events</a>
+                                    {% else %}
+                                    Manage your ongoing sales | <a href="/dashboard?view=archived"
+                                        class="text-decoration-none">View Archive 📂</a>
+                                    {% endif %}
+                                </p>
                             </div>
+
                             <form method="get" action="/dashboard" class="d-flex gap-2">
+                                <input type="hidden" name="view" value="{{ view_mode }}">
                                 <input type="text" name="q" value="{{ search_query }}" placeholder="Search..."
                                     style="width: 150px;">
                                 <button type="submit" class="btn btn-primary" style="padding: 6px 12px;">🔍</button>
@@ -146,7 +162,7 @@
                                             <th>Location</th>
                                             <th>Capacity</th>
                                             <th style="min-width: 90px;">Price</th>
-                                            <th style="min-width: 100px;">Actions</th>
+                                            <th style="min-width: 160px;">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -183,11 +199,29 @@
                                             </td>
 
                                             <td>
-                                                <button class="btn btn-sm btn-light" data-bs-toggle="modal"
-                                                    data-bs-target="#broadcastModal"
-                                                    onclick="setEventId('{{ event.id }}', '{{ event.name }}')">
-                                                    📢 Update
-                                                </button>
+                                                <div class="d-flex gap-2">
+
+                                                    {% if view_mode == 'archived' %}
+                                                    <button class="btn btn-sm btn-success w-100" title="Restore Event"
+                                                        onclick="confirmRestore('{{ event.id }}', '{{ event.name }}')">
+                                                        ♻️ Restore
+                                                    </button>
+
+                                                    {% else %}
+                                                    <button class="btn btn-sm btn-light" data-bs-toggle="modal"
+                                                        data-bs-target="#broadcastModal"
+                                                        onclick="setEventId('{{ event.id }}', '{{ event.name }}')">
+                                                        📢 Update
+                                                    </button>
+
+                                                    <button class="btn btn-sm btn-outline-secondary"
+                                                        title="Move to Archive"
+                                                        onclick="confirmArchive('{{ event.id }}', '{{ event.name }}')">
+                                                        📦 Archive
+                                                    </button>
+                                                    {% endif %}
+
+                                                </div>
                                             </td>
                                         </tr>
                                         {% endfor %}
@@ -201,7 +235,7 @@
                             <div class="d-flex justify-content-center align-items-center gap-3">
 
                                 {% if current_page > 1 %}
-                                <a href="/dashboard?page={{ current_page - 1 }}&q={{ search_query }}"
+                                <a href="/dashboard?page={{ current_page - 1 }}&q={{ search_query }}&view={{ view_mode }}"
                                     class="pagination-btn">
                                     ← Previous
                                 </a>
@@ -212,7 +246,7 @@
                                 </span>
 
                                 {% if current_page < total_pages %} <a
-                                    href="/dashboard?page={{ current_page + 1 }}&q={{ search_query }}"
+                                    href="/dashboard?page={{ current_page + 1 }}&q={{ search_query }}&view={{ view_mode }}"
                                     class="pagination-btn">
                                     Next →
                                     </a>
@@ -258,6 +292,7 @@
 
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
         <script>
+            // --- Dark Mode Logic ---
             function toggleTheme() {
                 const body = document.body;
                 const icon = document.getElementById('theme-icon');
@@ -273,14 +308,38 @@
                 }
             }
 
+            // Set icon correctly on load
             if (document.body.classList.contains('dark-mode')) {
                 const icon = document.getElementById('theme-icon');
                 if (icon) icon.innerText = '☀️';
             }
 
+            // --- Modal Helper ---
             function setEventId(id, name) {
                 document.getElementById('modalEventId').value = id;
                 document.getElementById('modalEventName').innerText = name;
+            }
+
+            // --- Archive Logic ---
+            function confirmArchive(eventId, eventName) {
+                if (confirm("Are you sure you want to move '" + eventName + "' to the archive?\nIt will be hidden from the dashboard and the bot.")) {
+                    fetch(`/dashboard/archive/${eventId}`, { method: 'POST' })
+                        .then(response => {
+                            if (response.ok) window.location.reload();
+                            else alert("Error archiving event.");
+                        });
+                }
+            }
+
+            // --- Restore Logic ---
+            function confirmRestore(eventId, eventName) {
+                if (confirm("Restore '" + eventName + "' back to active list?")) {
+                    fetch(`/dashboard/restore/${eventId}`, { method: 'POST' })
+                        .then(response => {
+                            if (response.ok) window.location.reload();
+                            else alert("Error restoring event.");
+                        });
+                }
             }
         </script>
     </body>

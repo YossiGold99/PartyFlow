@@ -59,11 +59,11 @@ def add_ticket(event_id, user_id, user_name, phone_number):
         return False
 
 def get_events():
-    """Fetches all events."""
+    """Fetches all ACTIVE events."""
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM events")
+    cursor.execute("SELECT * FROM events WHERE is_active = 1")
     rows = cursor.fetchall()
     conn.close()
     return [dict(row) for row in rows]
@@ -175,8 +175,11 @@ def get_users_with_tickets_for_event(event_id):
 
 # --- Pagination & Search Function ---
 
-def get_events_paginated(page=1, per_page=5, search_query=""):
-    """Fetches events sorted by ID (Ascending) with pagination and search."""
+def get_events_paginated(page=1, per_page=5, search_query="", active_status=1):
+    """
+    active_status=1 -> מביא אירועים פעילים
+    active_status=0 -> מביא אירועים בארכיון
+    """
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -184,17 +187,17 @@ def get_events_paginated(page=1, per_page=5, search_query=""):
     offset = (page - 1) * per_page
     
     if search_query:
-        query = "SELECT * FROM events WHERE name LIKE ? ORDER BY id ASC LIMIT ? OFFSET ?"
-        params = (f"%{search_query}%", per_page, offset)
+        query = "SELECT * FROM events WHERE is_active = ? AND name LIKE ? ORDER BY id ASC LIMIT ? OFFSET ?"
+        params = (active_status, f"%{search_query}%", per_page, offset)
         
-        count_query = "SELECT COUNT(*) FROM events WHERE name LIKE ?"
-        count_params = (f"%{search_query}%",)
+        count_query = "SELECT COUNT(*) FROM events WHERE is_active = ? AND name LIKE ?"
+        count_params = (active_status, f"%{search_query}%")
     else:
-        query = "SELECT * FROM events ORDER BY id ASC LIMIT ? OFFSET ?"
-        params = (per_page, offset)
+        query = "SELECT * FROM events WHERE is_active = ? ORDER BY id ASC LIMIT ? OFFSET ?"
+        params = (active_status, per_page, offset)
         
-        count_query = "SELECT COUNT(*) FROM events"
-        count_params = ()
+        count_query = "SELECT COUNT(*) FROM events WHERE is_active = ?"
+        count_params = (active_status,)
 
     cursor.execute(query, params)
     events = [dict(row) for row in cursor.fetchall()]
@@ -204,5 +207,22 @@ def get_events_paginated(page=1, per_page=5, search_query=""):
     total_pages = (total_items + per_page - 1) // per_page
 
     conn.close()
-    
     return events, total_pages
+
+def archive_event(event_id):
+    """Marks an event as archived (inactive)."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE events SET is_active = 0 WHERE id = ?", (event_id,))
+    conn.commit()
+    conn.close()
+
+
+def restore_event(event_id):
+    """Restores an archived event (sets is_active = 1)."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE events SET is_active = 1 WHERE id = ?", (event_id,))
+    conn.commit()
+    conn.close()
+
