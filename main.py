@@ -10,13 +10,14 @@ from datetime import date
 from dotenv import load_dotenv
 from pydantic import BaseModel
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
 # FastAPI Imports
-from fastapi import FastAPI, HTTPException, Request, Form, Depends, status, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Request, Form, Depends, status, BackgroundTasks, Response
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+# Note: We removed HTTPBasic imports as we switched to Cookies
 
 # Core Logic
 from core import db_manager
@@ -26,7 +27,7 @@ from core import db_manager
 # 1. Load environment variables
 load_dotenv()
 
-# 2. Configure Logging (Professional console output)
+# 2. Configure Logging
 logging.basicConfig(
     level=logging.INFO, 
     format='%(asctime)s - %(levelname)s - %(message)s'
@@ -35,23 +36,25 @@ logging.basicConfig(
 # 3. Initialize App
 app = FastAPI()
 
-# 4. Security Setup
-security = HTTPBasic()
+# 4. Security Setup (Cookie Based)
+# קריאת הסיסמה מהסביבה. אם לא מוגדרת, ברירת המחדל היא 'admin' (לא מומלץ לייצור)
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 
-def get_current_username(credentials: HTTPBasicCredentials = Depends(security)):
+def get_current_username(request: Request):
     """
-    Validates the username and password using secure constant-time comparison.
+    Checks for a valid session cookie.
+    If not found, redirects the user to the login page.
     """
-    correct_username = secrets.compare_digest(credentials.username, "admin")
-    correct_password = secrets.compare_digest(credentials.password, "1234")
-
-    if not (correct_username and correct_password):
+    user = request.cookies.get("session_user")
+    if not user:
+        # אם אין עוגייה, זרוק שגיאה שתגרום להפניה (או טפל בהפניה בדשבורד)
+        # בגישה פשוטה יותר: אם זה API, זרוק 401. אם זה דפדפן, הפנה ללוגין.
+        # כאן אנחנו מפנים ללוגין:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Basic"},
+            status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+            headers={"Location": "/login"}
         )
-    return credentials.username
+    return user
 
 # 5. Middleware (CORS)
 app.add_middleware(
@@ -64,7 +67,7 @@ app.add_middleware(
 
 # 6. Third-Party Keys
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
-YOUR_DOMAIN = "http://127.0.0.1:8000"  # Change this in production
+YOUR_DOMAIN = "http://127.0.0.1:8000"
 
 # 7. Static Files & Templates
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -92,14 +95,12 @@ class LoginRequest(BaseModel):
 async def send_telegram_broadcast_task(user_ids, message, event_name):
     """
     Asynchronous version: Sends messages in parallel (non-blocking).
-    Drastically reduces wait time for large user lists (e.g., 150+ users).
     """
     bot_token = os.getenv("TELEGRAM_TOKEN")
     send_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     
     logging.info(f"🚀 Starting FAST broadcast for '{event_name}' to {len(user_ids)} users...")
 
-    # Create an async session
     async with aiohttp.ClientSession() as session:
         tasks = []
         for user_id in user_ids:
@@ -114,16 +115,11 @@ async def send_telegram_broadcast_task(user_ids, message, event_name):
                 "text": full_text, 
                 "parse_mode": "Markdown"
             }
-            
-            # Create a task for the POST request but don't wait for it yet
             task = session.post(send_url, json=payload)
             tasks.append(task)
         
-        # Execute all tasks concurrently and gather results
-        # return_exceptions=True prevents one failure from stopping the whole batch
         responses = await asyncio.gather(*tasks, return_exceptions=True)
         
-        # Log success count (for debugging purposes)
         success_count = 0
         for response in responses:
             if not isinstance(response, Exception) and response.status == 200:
@@ -142,6 +138,45 @@ def read_root():
 @app.get("/success", response_class=HTMLResponse)
 async def success_page(request: Request):
     return templates.TemplateResponse("success.html", {"request": request})
+
+
+# --- Authentication Routes (Login / Logout) ---
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    """Renders the login page."""
+    # אם אין לך קובץ login.html, צור אותו בתיקיית templates
+    return templates.TemplateResponse("login.html", {"request": request})
+
+@app.post("/login")
+async def login(request: Request, username: str = Form(...), password: str = Form(...)):
+    """Validates credentials and sets a session cookie."""
+    
+    # בדיקה מול הסיסמה מה-ENV
+    if not ADMIN_PASSWORD:
+        return templates.TemplateResponse("login.html", {
+            "request": request, 
+            "error": "Security Error: No admin password configured in .env"
+        })
+
+    if username == "admin" and password == ADMIN_PASSWORD:
+        response = RedirectResponse(url="/dashboard", status_code=303)
+        # קביעת עוגייה (Cookie)
+        response.set_cookie(key="session_user", value=username)
+        return response
+    
+    return templates.TemplateResponse("login.html", {
+        "request": request, 
+        "error": "Invalid credentials"
+    })
+
+@app.get("/logout")
+async def logout(request: Request):
+    """Logs out the user by deleting the cookie."""
+    response = RedirectResponse(url="/login", status_code=303)
+    response.delete_cookie("session_user")
+    return response
+
 
 # -- API Routes --
 
@@ -165,7 +200,6 @@ def add_event_api(event: EventRequest):
 
 @app.get("/events")
 def get_events_api():
-    """Returns a list of all events (used by the Bot)."""
     return {"events": db_manager.get_events()}
 
 @app.get("/api/tickets/{user_id}")
@@ -174,9 +208,9 @@ def get_tickets_api(user_id: int):
     return {"tickets": tickets}
 
 @app.post("/api/login")
-def login(request: LoginRequest):
-    admin_password = os.getenv("ADMIN_PASSWORD", "admin")
-    if request.password == admin_password:
+def login_api(request: LoginRequest):
+    # שימוש בסיסמה המאובטחת גם ל-API
+    if request.password == ADMIN_PASSWORD:
         return {"success": True, "message": "Login successful"}
     else:
         raise HTTPException(status_code=401, detail="Incorrect password")
@@ -188,26 +222,18 @@ def login(request: LoginRequest):
 def show_dashboard(request: Request, page: int = 1, q: str = ""):
     """Renders the Admin Dashboard with Pagination, Search, and Live Capacity Stats."""
     
-    # 1. Retrieving events from the database
     raw_events, total_pages = db_manager.get_events_paginated(page=page, per_page=5, search_query=q)
     
-    # 2. Calculate statistics for each event (sales + remaining)
     events_processed = []
     for event in raw_events:
-        e_dict = dict(event) #Convert to a dictionary so we can edit
-        
-        # Checking how many were actually sold
+        e_dict = dict(event)
         sold = db_manager.get_tickets_sold(e_dict['id'])
         total = e_dict['total_tickets']
-        
-        # Adding data to an object
         e_dict['sold'] = sold
         e_dict['remaining'] = total - sold
         e_dict['percent'] = int((sold / total) * 100) if total > 0 else 0
-        
         events_processed.append(e_dict)
 
-    # 3. General data
     stats = {
         "total_revenue": db_manager.get_total_revenue(),
         "tickets_sold": db_manager.get_total_tickets_sold(),
@@ -236,21 +262,17 @@ def add_event_web(
 
 @app.post("/dashboard/broadcast", dependencies=[Depends(get_current_username)])
 def broadcast_message(
-    background_tasks: BackgroundTasks,  # <--- הוספנו את זה לטיפול ברקע
+    background_tasks: BackgroundTasks,
     event_id: int = Form(...), 
     message: str = Form(...)
 ):
-    """Sends a broadcast message to all users who purchased a ticket."""
     event = db_manager.get_event_by_id(event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
     
     user_ids = db_manager.get_users_with_tickets_for_event(event_id)
-    
-    # במקום לשלוח כאן ולתקוע את הדפדפן, אנחנו מוסיפים משימת רקע
     background_tasks.add_task(send_telegram_broadcast_task, user_ids, message, event['name'])
     
-    # החזרת תשובה מיידית למשתמש
     return RedirectResponse(url="/dashboard", status_code=303)
 
 
@@ -258,7 +280,6 @@ def broadcast_message(
 
 @app.post("/create_checkout_session")
 def create_checkout_session(ticket: TicketRequest):
-    # Check inventory
     event = db_manager.get_event_by_id(ticket.event_id)
     sold_count = db_manager.get_tickets_sold(ticket.event_id)
     
@@ -299,8 +320,6 @@ def payment_success(session_id: str, request: Request):
         session = stripe.checkout.Session.retrieve(session_id)
         if session.payment_status == 'paid':
             data = session.metadata
-            
-            # Save ticket & Generate QR
             ticket_id = db_manager.add_ticket(
                 event_id=int(data['event_id']),
                 user_id=int(data['user_id']),
@@ -310,7 +329,6 @@ def payment_success(session_id: str, request: Request):
             event = db_manager.get_event_by_id(int(data['event_id']))
             qr_path = generate_qr_code(ticket_id, event['name'], data['user_name'])
             
-            # Send to Telegram
             caption = (
                 f"🎉 Payment Confirmed!\n"
                 f"Event: {event['name']}\n"
