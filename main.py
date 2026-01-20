@@ -78,6 +78,7 @@ class TicketRequest(BaseModel):
     user_name: str
     user_id: int
     phone_number: str
+    quantity: int = 1  # Default to 1 if not provided
 
 class EventRequest(BaseModel):
     name: str
@@ -372,8 +373,10 @@ def create_checkout_session(ticket: TicketRequest):
     
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
-    if sold_count >= event['total_tickets']:
-        raise HTTPException(status_code=400, detail="SOLD OUT")
+    
+    # Check if enough tickets remain for the requested quantity
+    if sold_count + ticket.quantity > event['total_tickets']:
+        raise HTTPException(status_code=400, detail="Not enough tickets left!")
 
     try:
         checkout_session = stripe.checkout.Session.create(
@@ -384,14 +387,15 @@ def create_checkout_session(ticket: TicketRequest):
                     'product_data': {'name': f"Ticket: {event['name']}"},
                     'unit_amount': int(event['price'] * 100),
                 },
-                'quantity': 1,
+                'quantity': ticket.quantity,  # Use selected quantity
             }],
             mode='payment',
             metadata={
                 "event_id": ticket.event_id,
                 "user_id": ticket.user_id,
                 "user_name": ticket.user_name,
-                "phone_number": ticket.phone_number
+                "phone_number": ticket.phone_number,
+                "quantity": ticket.quantity  # Store quantity in metadata
             },
             success_url=YOUR_DOMAIN + "/payment_success?session_id={CHECKOUT_SESSION_ID}",
             cancel_url=YOUR_DOMAIN + "/payment_cancel",
@@ -407,22 +411,30 @@ def payment_success(session_id: str, request: Request):
         session = stripe.checkout.Session.retrieve(session_id)
         if session.payment_status == 'paid':
             data = session.metadata
-            ticket_id = db_manager.add_ticket(
-                event_id=int(data['event_id']),
-                user_id=int(data['user_id']),
-                user_name=data['user_name'],
-                phone_number=data['phone_number']
-            )
-            event = db_manager.get_event_by_id(int(data['event_id']))
-            qr_path = generate_qr_code(ticket_id, event['name'], data['user_name'])
+            quantity = int(data.get('quantity', 1)) # Default to 1 if missing
             
-            caption = (
-                f"🎉 Payment Confirmed!\n"
-                f"Event: {event['name']}\n"
-                f"Ticket ID: #{ticket_id}\n\n"
-                f"Show this QR code at the entrance."
-            )
-            send_ticket_to_telegram(data['user_id'], qr_path, caption)
+            event = db_manager.get_event_by_id(int(data['event_id']))
+            
+            # Loop to create multiple tickets
+            for i in range(quantity):
+                ticket_id = db_manager.add_ticket(
+                    event_id=int(data['event_id']),
+                    user_id=int(data['user_id']),
+                    user_name=data['user_name'],
+                    phone_number=data['phone_number']
+                )
+                
+                qr_path = generate_qr_code(ticket_id, event['name'], data['user_name'])
+                
+                caption = (
+                    f"🎉 Ticket {i+1}/{quantity} Confirmed!\n"
+                    f"Event: {event['name']}\n"
+                    f"Ticket ID: #{ticket_id}\n\n"
+                    f"Show this QR code at the entrance."
+                )
+                # Send individual QR to user
+                send_ticket_to_telegram(data['user_id'], qr_path, caption)
+            
             return templates.TemplateResponse("success.html", {"request": request})
         else:
             return "Payment Failed or Pending."

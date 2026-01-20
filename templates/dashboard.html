@@ -43,7 +43,7 @@
         <div class="container">
 
             <div class="d-flex justify-content-end gap-2 mb-3">
-                <a href="/dashboard/export_csv" class="btn btn-success d-flex align-items-center gap-2 shadow-sm"
+                <a href="/dashboard/export_csv" class="btn btn-primary d-flex align-items-center gap-2 shadow-sm"
                     style="font-size: 0.9rem; font-weight: 600;">
                     📥 Events Report
                 </a>
@@ -338,7 +338,7 @@
                 if (confirm("Are you sure you want to move '" + eventName + "' to the archive?\nIt will be hidden from the dashboard and the bot.")) {
                     fetch(`/dashboard/archive/${eventId}`, { method: 'POST' })
                         .then(response => {
-                            if (response.ok) window.location.reload();
+                            if (response.ok) window.location.reload(); 
                             else alert("Error archiving event.");
                         });
                 }
@@ -349,7 +349,7 @@
                 if (confirm("Restore '" + eventName + "' back to active list?")) {
                     fetch(`/dashboard/restore/${eventId}`, { method: 'POST' })
                         .then(response => {
-                            if (response.ok) window.location.reload();
+                            if (response.ok) window.location.reload(); 
                             else alert("Error restoring event.");
                         });
                 }
