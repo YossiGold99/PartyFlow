@@ -12,6 +12,7 @@
 
     <body>
         <script>
+            // Check immediately if user selected dark mode and apply before page render
             if (localStorage.getItem('theme') === 'dark') {
                 document.body.classList.add('dark-mode');
             }
@@ -40,6 +41,18 @@
         </header>
 
         <div class="container">
+
+            <div class="d-flex justify-content-end gap-2 mb-3">
+                <a href="/dashboard/export_csv" class="btn btn-success d-flex align-items-center gap-2 shadow-sm"
+                    style="font-size: 0.9rem; font-weight: 600;">
+                    📥 Events Report
+                </a>
+
+                <a href="/dashboard/export_tickets" class="btn btn-primary d-flex align-items-center gap-2 shadow-sm"
+                    style="font-size: 0.9rem; font-weight: 600;">
+                    🎫 Guest List (Tickets)
+                </a>
+            </div>
 
             <div class="row mb-4 g-3">
                 <div class="col-md-4">
@@ -308,7 +321,7 @@
                 }
             }
 
-            // Set icon correctly on load
+            // Ensure icon is correct after refresh
             if (document.body.classList.contains('dark-mode')) {
                 const icon = document.getElementById('theme-icon');
                 if (icon) icon.innerText = '☀️';

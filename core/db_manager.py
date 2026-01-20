@@ -20,7 +20,8 @@ def create_tables():
             date TEXT NOT NULL, 
             location TEXT NOT NULL, 
             price REAL NOT NULL, 
-            total_tickets INTEGER NOT NULL
+            total_tickets INTEGER NOT NULL,
+            is_active INTEGER DEFAULT 1
         )
     ''')
     
@@ -63,6 +64,7 @@ def get_events():
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
+    # Filter by is_active = 1
     cursor.execute("SELECT * FROM events WHERE is_active = 1")
     rows = cursor.fetchall()
     conn.close()
@@ -73,8 +75,8 @@ def add_event(name, date, location, price, total_tickets):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute('''
-        INSERT INTO events (name, date, location, price, total_tickets) 
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO events (name, date, location, price, total_tickets, is_active) 
+        VALUES (?, ?, ?, ?, ?, 1)
     ''', (name, date, location, price, total_tickets))
     conn.commit()
     conn.close()
@@ -159,13 +161,13 @@ def get_events_by_date(target_date):
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM events WHERE date = ?", (target_date,))
+    cursor.execute("SELECT * FROM events WHERE date = ? AND is_active = 1", (target_date,))
     rows = cursor.fetchall()
     conn.close()
     return [dict(row) for row in rows]
 
 def get_users_with_tickets_for_event(event_id):
-    #Returns a list of user_ids that have a ticket for a specific event.
+    # Returns a list of user_ids that have a ticket for a specific event.
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute("SELECT DISTINCT user_id FROM tickets WHERE event_id = ?", (event_id,))
@@ -173,12 +175,12 @@ def get_users_with_tickets_for_event(event_id):
     conn.close()
     return [row[0] for row in rows]
 
-# --- Pagination & Search Function ---
+# --- Pagination, Archive & Export Functions ---
 
 def get_events_paginated(page=1, per_page=5, search_query="", active_status=1):
     """
-    active_status=1 -> מביא אירועים פעילים
-    active_status=0 -> מביא אירועים בארכיון
+    active_status=1 -> fetches active events
+    active_status=0 -> fetches archived events
     """
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
@@ -217,7 +219,6 @@ def archive_event(event_id):
     conn.commit()
     conn.close()
 
-
 def restore_event(event_id):
     """Restores an archived event (sets is_active = 1)."""
     conn = sqlite3.connect(DB_NAME)
@@ -226,3 +227,51 @@ def restore_event(event_id):
     conn.commit()
     conn.close()
 
+def get_all_events_for_export():
+    """Fetches all events with sales data for CSV export."""
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    # Complex query that also fetches sold ticket count and revenue per event
+    query = '''
+        SELECT 
+            e.id, e.name, e.date, e.location, e.price, e.total_tickets,
+            COUNT(t.id) as sold_count,
+            (COUNT(t.id) * e.price) as revenue
+        FROM events e
+        LEFT JOIN tickets t ON e.id = t.event_id
+        WHERE e.is_active = 1
+        GROUP BY e.id
+        ORDER BY e.date DESC
+    '''
+    
+    cursor.execute(query)
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+def get_all_tickets_for_export():
+    """Fetches all tickets with event details for the Guest List export."""
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    # Query linking ticket to event details
+    query = '''
+        SELECT 
+            t.id as ticket_id,
+            e.name as event_name,
+            t.user_name,
+            t.phone_number,
+            t.purchase_time,
+            t.user_id as telegram_id
+        FROM tickets t
+        JOIN events e ON t.event_id = e.id
+        ORDER BY t.id DESC
+    '''
+    
+    cursor.execute(query)
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]

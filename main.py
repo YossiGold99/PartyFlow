@@ -6,6 +6,8 @@ import secrets
 import logging
 import aiohttp
 import asyncio
+import csv
+from io import StringIO
 from datetime import date
 from dotenv import load_dotenv
 from pydantic import BaseModel
@@ -14,7 +16,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 # FastAPI Imports
 from fastapi import FastAPI, HTTPException, Request, Form, Depends, status, BackgroundTasks, Response
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -45,7 +47,6 @@ def get_current_username(request: Request):
     """
     user = request.cookies.get("session_user")
     if not user:
-
         raise HTTPException(
             status_code=status.HTTP_307_TEMPORARY_REDIRECT,
             headers={"Location": "/login"}
@@ -213,17 +214,18 @@ def login_api(request: LoginRequest):
 @app.get("/dashboard", response_class=HTMLResponse, dependencies=[Depends(get_current_username)])
 def show_dashboard(request: Request, page: int = 1, q: str = "", view: str = "active"):
     """
-    view='active' -> מציג רגיל
-    view='archived' -> מציג את הארכיון
+    view='active' -> standard view
+    view='archived' -> archive view
     """
     
+    # Set fetch status (1=active, 0=archived)
     is_active_status = 0 if view == 'archived' else 1
     
     raw_events, total_pages = db_manager.get_events_paginated(
         page=page, 
         per_page=5, 
         search_query=q,
-        active_status=is_active_status  
+        active_status=is_active_status
     )
     
     events_processed = []
@@ -249,13 +251,8 @@ def show_dashboard(request: Request, page: int = 1, q: str = "", view: str = "ac
         "current_page": page,
         "total_pages": total_pages,
         "search_query": q,
-        "view_mode": view  
+        "view_mode": view 
     })
-
-@app.post("/dashboard/restore/{event_id}", dependencies=[Depends(get_current_username)])
-def restore_event_route(event_id: int):
-    db_manager.restore_event(event_id)
-    return RedirectResponse(url="/dashboard?view=archived", status_code=303)
 
 @app.post("/dashboard/add", dependencies=[Depends(get_current_username)])
 def add_event_web(
@@ -286,7 +283,85 @@ def broadcast_message(
 @app.post("/dashboard/archive/{event_id}", dependencies=[Depends(get_current_username)])
 def archive_event_route(event_id: int):
     db_manager.archive_event(event_id)
+    # Redirect to dashboard
     return RedirectResponse(url="/dashboard", status_code=303)
+
+@app.post("/dashboard/restore/{event_id}", dependencies=[Depends(get_current_username)])
+def restore_event_route(event_id: int):
+    db_manager.restore_event(event_id)
+    # Redirect back to archive view
+    return RedirectResponse(url="/dashboard?view=archived", status_code=303)
+
+@app.get("/dashboard/export_csv", dependencies=[Depends(get_current_username)])
+def export_events_csv():
+    # 1. Fetch data
+    events = db_manager.get_all_events_for_export()
+    
+    # 2. Create CSV in memory
+    output = StringIO()
+    writer = csv.writer(output)
+    
+    # Column headers
+    writer.writerow(['ID', 'Event Name', 'Date', 'Location', 'Price (NIS)', 'Capacity', 'Tickets Sold', 'Revenue'])
+    
+    # Write rows
+    for e in events:
+        writer.writerow([
+            e['id'], 
+            e['name'], 
+            e['date'], 
+            e['location'], 
+            e['price'], 
+            e['total_tickets'], 
+            e['sold_count'], 
+            e['revenue']
+        ])
+        
+    # 3. Prepare download
+    output.seek(0)
+    
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=partyflow_report.csv"}
+    )
+
+@app.get("/dashboard/export_tickets", dependencies=[Depends(get_current_username)])
+def export_tickets_csv():
+    # 1. Fetch all tickets
+    tickets = db_manager.get_all_tickets_for_export()
+    
+    # 2. Create CSV in memory
+    output = StringIO()
+    writer = csv.writer(output)
+    
+    # Headers (Matches QR data)
+    writer.writerow(['Ticket ID', 'Event Name', 'Owner Name', 'Phone', 'Purchase Time', 'Telegram ID', 'QR String'])
+    
+    # Write rows
+    for t in tickets:
+        # Generate QR string (for manual verification)
+        qr_string = f"TICKET-ID:{t['ticket_id']} | EVENT:{t['event_name']} | OWNER:{t['telegram_id']}"
+        
+        writer.writerow([
+            t['ticket_id'], 
+            t['event_name'], 
+            t['user_name'], 
+            t['phone_number'], 
+            t['purchase_time'],
+            t['telegram_id'],
+            qr_string
+        ])
+        
+    # 3. Prepare download
+    output.seek(0)
+    
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=guest_list.csv"}
+    )
+
 
 # --- Stripe Payment Logic ---
 
